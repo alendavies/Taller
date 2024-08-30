@@ -1,13 +1,29 @@
 use core::panic;
 use std::{
     collections::HashMap,
+    default,
     fs::File,
     io::{self, BufRead, BufReader, Error},
+    result,
 };
 
 enum CustomError {
     ReaderError,
     Main_Error,
+}
+
+struct Table {
+    columns: Vec<String>,
+    registers: Vec<HashMap<String, String>>,
+}
+
+impl Table {
+    pub fn new() -> Self {
+        Self {
+            columns: Vec::new(),
+            registers: Vec::new(),
+        }
+    }
 }
 
 enum Operator {
@@ -26,10 +42,26 @@ fn is_operator(c: char) -> bool {
     matches!(c, '+' | '-' | '*' | '/' | '%' | '=' | '<' | '>')
 }
 
+fn equal_to_str(a: &str, b: &str) -> bool {
+    a == b
+}
+
+fn equal_to_num(a: i32, b: i32) -> bool {
+    a == b
+}
+
+fn greater_than(a: i32, b: i32) -> bool {
+    a > b
+}
+
+fn less_than(a: i32, b: i32) -> bool {
+    a < b
+}
+
 impl Where {
     pub fn new_from_tokens(tokens: Vec<&str>) -> Self {
         if tokens.len() < 1 {
-            println!("Error en clausula where");
+            println!("Error al crear where");
         }
         let mut column = String::new();
         let mut value = String::new();
@@ -60,6 +92,20 @@ impl Where {
             value,
         }
     }
+
+    fn execute(&self, register: &HashMap<String, String>) -> bool {
+        let default = String::new();
+        let x = register.get(&self.column).unwrap_or(&default);
+        let y = &self.value;
+
+        let op_result = match self.operator {
+            Operator::Less => x < y,
+            Operator::Greater => x > y,
+            Operator::Equal => x == y,
+        };
+
+        op_result
+    }
 }
 
 struct OrderBy {
@@ -69,12 +115,12 @@ struct OrderBy {
 
 impl OrderBy {
     pub fn new_from_tokens(tokens: Vec<&str>) -> Self {
-        if tokens.len() < 1 {
-            println!("Error en clausula orderby");
-        }
-
         let mut column = String::new();
         let mut order = String::new();
+
+        if tokens.len() < 1 {
+            return Self { column, order };
+        }
 
         for token in tokens {
             if token.chars().all(|c| c.is_alphabetic()) {
@@ -87,7 +133,25 @@ impl OrderBy {
         }
         Self { column, order }
     }
+
+    fn execute(
+        &self,
+        registers: &mut Vec<HashMap<String, String>>,
+    ) -> Vec<HashMap<String, String>> {
+        registers.sort_by(|a, b| {
+            let default = String::new();
+            let val_a = a.get(&self.column).unwrap_or(&default);
+            let val_b = b.get(&self.column).unwrap_or(&default);
+            if self.order == "DESC" {
+                val_b.cmp(val_a)
+            } else {
+                val_a.cmp(val_b)
+            }
+        });
+        registers.to_vec()
+    }
 }
+
 struct Select {
     columns: Vec<String>,
     where_clause: Where,
@@ -115,9 +179,16 @@ impl Select {
         }
         if tokens[i] == "WHERE" {
             i += 1;
-            while tokens[i] != "ORDER" && i < tokens.len() {
-                where_tokens.push(tokens[i].as_str());
-                i += 1;
+            if tokens.contains(&String::from("ORDER")) {
+                while tokens[i] != "ORDER" {
+                    where_tokens.push(tokens[i].as_str());
+                    i += 1;
+                }
+            } else {
+                while i < tokens.len() {
+                    where_tokens.push(tokens[i].as_str());
+                    i += 1;
+                }
             }
         }
         if i < tokens.len() && tokens[i] == "ORDER" && tokens[i + 1] == "BY" {
@@ -137,37 +208,64 @@ impl Select {
             orderby_clause,
         }
     }
-}
 
-struct Table {
-    columns: Vec<String>,
-    registers: Vec<HashMap<String, String>>,
-}
+    fn execute(&self, line: String, columns: &Vec<String>) -> HashMap<String, String> {
+        let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
 
-fn select(query: Select, line: String) -> Result<Vec<String>, CustomError> {
-    let result = Vec::new();
+        let mut register = HashMap::new();
 
-    // serialize output before return
+        for (idx, col) in columns.iter().enumerate() {
+            register.insert(col.to_string(), atributes[idx].to_string());
+        }
 
-    Ok(result)
+        let mut col_selected = Vec::new();
+        if self.columns[0] == "*" {
+            for col in columns {
+                col_selected.push(col.to_string());
+            }
+        } else {
+            for col in &self.columns {
+                col_selected.push(col.to_string());
+            }
+        }
+
+        let mut result = HashMap::new();
+        let op_result = self.where_clause.execute(&register);
+
+        if op_result == true {
+            for col in col_selected {
+                result.insert(
+                    col.to_string(),
+                    register.get(&col).unwrap_or(&String::new()).to_string(),
+                );
+            }
+        }
+
+        result
+    }
 }
 
 fn parse(string: &str) -> Vec<String> {
-    let length = string.len();
     let mut index = 0;
     let mut tokens = Vec::new();
     let mut current = String::new();
+
+    let string = string.replace(";", "");
+    let length = string.len();
+
     let mut char = string.chars().nth(index).unwrap_or('0');
 
     while index < length {
-        if char.is_alphanumeric() || char == '_' && index < length {
-            while char.is_alphabetic() || char == '_' {
+        if char.is_alphabetic() || char == '_' {
+            while (char.is_alphabetic() || char == '_') && index < length {
                 current.push(char);
                 index += 1;
                 char = string.chars().nth(index).unwrap_or('0');
             }
+            tokens.push(current);
+            current = String::new();
+        } else if char.is_numeric() {
             while char.is_numeric() && index < length {
-                current.push(char);
                 index += 1;
                 char = string.chars().nth(index).unwrap_or('0');
             }
@@ -183,7 +281,7 @@ fn parse(string: &str) -> Vec<String> {
                 index += 1;
                 char = string.chars().nth(index).unwrap_or('0');
 
-                while char != '\'' {
+                while char != '\'' && index < length {
                     current.push(char);
                     index += 1;
                     char = string.chars().nth(index).unwrap_or('0');
@@ -193,6 +291,7 @@ fn parse(string: &str) -> Vec<String> {
                 tokens.push(current);
                 current = String::new();
                 index += 1;
+                char = string.chars().nth(index).unwrap_or('0');
             } else {
                 while !char.is_alphanumeric() && !char.is_whitespace() && index < length {
                     current.push(char);
@@ -200,30 +299,40 @@ fn parse(string: &str) -> Vec<String> {
                     char = string.chars().nth(index).unwrap_or('0');
                 }
                 tokens.push(current);
-                if char.is_whitespace() {
-                    index += 1;
-                    char = string.chars().nth(index).unwrap_or('0');
-                }
                 current = String::new();
             }
         }
     }
+    tokens.retain(|s| !s.is_empty());
 
     tokens
 }
 
-fn exec_query(file: File, query: &str) -> Result<Vec<String>, CustomError> {
+fn exec_query(file: File, query: &str) -> Result<Table, CustomError> {
     let reader = BufReader::new(file);
     let tokens = parse(query);
     let clause;
-    let result;
+    let mut result = Table::new();
 
     match tokens[0].as_str() {
         "SELECT" => {
             clause = Select::new_from_tokens(tokens);
-            for line in reader.lines() {
-                let line = line?;
-                result = select(clause, line);
+            for (idx, line) in reader.lines().enumerate() {
+                let line = line.map_err(|_| CustomError::ReaderError)?;
+                if idx == 0 {
+                    result.columns = line.split(',').map(|s| s.to_string()).collect();
+                    continue;
+                }
+                let register = clause.execute(line, &result.columns);
+                if !register.is_empty() {
+                    result.registers.push(register);
+                }
+            }
+            println!("{:?}", result.registers);
+
+            if clause.orderby_clause.column != "" {
+                let registers_ordered = clause.orderby_clause.execute(&mut result.registers);
+                result.registers = registers_ordered;
             }
         }
         _ => todo!(),
@@ -235,7 +344,7 @@ fn exec_query(file: File, query: &str) -> Result<Vec<String>, CustomError> {
 fn main() -> io::Result<()> {
     let example = vec![
         "tabla.csv",
-        "SELECT id, producto WHERE cantidad > 1 ORDER BY email DESC;",
+        "SELECT id, nombre, email FROM clientes WHERE apellido = 'López' ORDER BY email DESC;",
     ];
 
     let table = example[0];

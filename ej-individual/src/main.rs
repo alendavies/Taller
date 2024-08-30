@@ -5,6 +5,11 @@ use std::{
     io::{self, BufRead, BufReader, Error},
 };
 
+enum CustomError {
+    ReaderError,
+    Main_Error,
+}
+
 enum Operator {
     Equal,
     Greater,
@@ -17,22 +22,42 @@ struct Where {
     value: String,
 }
 
+fn is_operator(c: char) -> bool {
+    matches!(c, '+' | '-' | '*' | '/' | '%' | '=' | '<' | '>')
+}
+
 impl Where {
-    pub fn new(tokens: Vec<&str>) -> Self {
+    pub fn new_from_tokens(tokens: Vec<&str>) -> Self {
         if tokens.len() < 1 {
             println!("Error en clausula where");
         }
-        let operator = match tokens[1] {
-            ">" => Operator::Greater,
-            "<" => Operator::Less,
-            "=" => Operator::Equal,
-            _ => panic!("Operador no soportado"),
-        };
+        let mut column = String::new();
+        let mut value = String::new();
+        let mut operator = Operator::Equal;
+
+        for token in tokens {
+            if token.chars().all(|c| c.is_alphabetic()) {
+                column = token.to_string();
+            } else if token.chars().all(|c| c.is_numeric())
+                || (token.starts_with('\'') && token.ends_with('\''))
+            {
+                value = token.to_string();
+            } else if token.chars().all(|c| is_operator(c)) {
+                operator = match token {
+                    "=" => Operator::Equal,
+                    ">" => Operator::Greater,
+                    "<" => Operator::Less,
+                    _ => panic!("Operador no soportado"),
+                };
+            } else {
+                println!("Error en clausula where");
+            }
+        }
 
         Self {
-            column: tokens[0].to_string(),
+            column,
             operator,
-            value: tokens[2].to_string(),
+            value,
         }
     }
 }
@@ -43,21 +68,26 @@ struct OrderBy {
 }
 
 impl OrderBy {
-    pub fn new(tokens: Vec<&str>) -> Self {
+    pub fn new_from_tokens(tokens: Vec<&str>) -> Self {
         if tokens.len() < 1 {
             println!("Error en clausula orderby");
         }
-        let column = tokens[0].to_string();
+
+        let mut column = String::new();
         let mut order = String::new();
 
-        if tokens.len() == 2 {
-            order = tokens[1].to_string();
+        for token in tokens {
+            if token.chars().all(|c| c.is_alphabetic()) {
+                if token.chars().all(|c| c.is_lowercase()) {
+                    column = token.to_string();
+                } else if token.chars().all(|c| c.is_uppercase()) {
+                    order = token.to_string();
+                }
+            }
         }
-
         Self { column, order }
     }
 }
-
 struct Select {
     columns: Vec<String>,
     where_clause: Where,
@@ -65,7 +95,7 @@ struct Select {
 }
 
 impl Select {
-    pub fn new(tokens: Vec<String>) {
+    pub fn new_from_tokens(tokens: Vec<String>) -> Self {
         if !tokens.contains(&String::from("WHERE")) || !tokens.contains(&String::from("SELECT")) {
             println!("Clausula SELECT inválida");
         }
@@ -97,8 +127,15 @@ impl Select {
                 i += 1;
             }
         }
-        Where::new(where_tokens);
-        OrderBy::new(orderby_tokens);
+
+        let where_clause = Where::new_from_tokens(where_tokens);
+        let orderby_clause = OrderBy::new_from_tokens(orderby_tokens);
+
+        Self {
+            columns: columns.iter().map(|c| c.to_string()).collect(),
+            where_clause,
+            orderby_clause,
+        }
     }
 }
 
@@ -107,39 +144,8 @@ struct Table {
     registers: Vec<HashMap<String, String>>,
 }
 
-enum CustomError {
-    ReaderError,
-    Main_Error,
-}
-
-fn select(query: Select, reader: BufReader<File>) -> Result<Vec<String>, CustomError> {
+fn select(query: Select, line: String) -> Result<Vec<String>, CustomError> {
     let result = Vec::new();
-    let where_value = query.where_clause.value.parse::<i32>().unwrap_or(0);
-
-    let mut iter = reader.lines();
-
-    let mut columns;
-
-    if let Some(first_row) = iter.next() {
-        columns = first_row
-            .map_err(|_| CustomError::ReaderError)?
-            .split(",")
-            .filter(|col| query.columns.contains(&col.to_string()))
-            .map(|c| c.to_string())
-            .collect();
-    } else {
-        return Err(CustomError::ReaderError);
-    }
-
-    let table = Table {
-        columns,
-        registers: Vec::new(),
-    };
-
-    for line in iter {
-        let line = line.map_err(|_| CustomError::ReaderError)?;
-        let tokens: Vec<String> = line.split(",").map(|c| c.to_string()).collect();
-    }
 
     // serialize output before return
 
@@ -207,17 +213,18 @@ fn parse(string: &str) -> Vec<String> {
 }
 
 fn exec_query(file: File, query: &str) -> Result<Vec<String>, CustomError> {
-    let tokens: Vec<&str> = query.split_whitespace().collect();
     let reader = BufReader::new(file);
-    //let mut clause;
-    let result = Vec::new();
     let tokens = parse(query);
+    let clause;
+    let result;
 
     match tokens[0].as_str() {
         "SELECT" => {
-            Select::new(tokens);
-
-            // result = select(clause, reader).map_err(|_| CustomError::ReaderError)?;
+            clause = Select::new_from_tokens(tokens);
+            for line in reader.lines() {
+                let line = line?;
+                result = select(clause, line);
+            }
         }
         _ => todo!(),
     }
@@ -228,7 +235,7 @@ fn exec_query(file: File, query: &str) -> Result<Vec<String>, CustomError> {
 fn main() -> io::Result<()> {
     let example = vec![
         "tabla.csv",
-        "SELECT id, producto WHERE cantidad > 1 ORDER BY email",
+        "SELECT id, producto WHERE cantidad > 1 ORDER BY email DESC;",
     ];
 
     let table = example[0];

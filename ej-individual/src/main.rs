@@ -42,48 +42,30 @@ fn is_operator(c: char) -> bool {
     matches!(c, '+' | '-' | '*' | '/' | '%' | '=' | '<' | '>')
 }
 
-fn equal_to_str(a: &str, b: &str) -> bool {
-    a == b
-}
-
-fn equal_to_num(a: i32, b: i32) -> bool {
-    a == b
-}
-
-fn greater_than(a: i32, b: i32) -> bool {
-    a > b
-}
-
-fn less_than(a: i32, b: i32) -> bool {
-    a < b
-}
-
 impl Where {
     pub fn new_from_tokens(tokens: Vec<&str>) -> Self {
         if tokens.len() < 1 {
             println!("Error al crear where");
         }
+
         let mut column = String::new();
         let mut value = String::new();
         let mut operator = Operator::Equal;
+        let mut i = 0;
 
-        for token in tokens {
-            if token.chars().all(|c| c.is_alphabetic()) {
-                column = token.to_string();
-            } else if token.chars().all(|c| c.is_numeric())
-                || (token.starts_with('\'') && token.ends_with('\''))
-            {
-                value = token.to_string();
-            } else if token.chars().all(|c| is_operator(c)) {
-                operator = match token {
+        while i < tokens.len() {
+            let char = tokens[i].chars().nth(0).unwrap_or('0');
+            if is_operator(char) {
+                column = tokens[i - 1].to_string();
+                value = tokens[i + 1].to_string();
+                operator = match tokens[i] {
                     "=" => Operator::Equal,
                     ">" => Operator::Greater,
                     "<" => Operator::Less,
                     _ => panic!("Operador no soportado"),
-                };
-            } else {
-                println!("Error en clausula where");
+                }
             }
+            i += 1;
         }
 
         Self {
@@ -99,9 +81,9 @@ impl Where {
         let y = &self.value;
 
         let op_result = match self.operator {
-            Operator::Less => x < y,
-            Operator::Greater => x > y,
-            Operator::Equal => x == y,
+            Operator::Less => *x < *y,
+            Operator::Greater => *x > *y,
+            Operator::Equal => *x == *y,
         };
 
         op_result
@@ -172,10 +154,11 @@ impl Select {
 
         if tokens[i] == "SELECT" {
             i += 1;
-            while tokens[i] != "WHERE" {
+            while tokens[i] != "FROM" {
                 columns.push(tokens[i].as_str());
                 i += 1;
             }
+            i += 2;
         }
         if tokens[i] == "WHERE" {
             i += 1;
@@ -277,7 +260,6 @@ fn parse(string: &str) -> Vec<String> {
                 index += 1;
                 char = string.chars().nth(index).unwrap_or('0');
             } else if char == '\'' {
-                current.push(char);
                 index += 1;
                 char = string.chars().nth(index).unwrap_or('0');
 
@@ -286,7 +268,6 @@ fn parse(string: &str) -> Vec<String> {
                     index += 1;
                     char = string.chars().nth(index).unwrap_or('0');
                 }
-                current.push(char);
 
                 tokens.push(current);
                 current = String::new();
@@ -324,16 +305,17 @@ fn exec_query(file: File, query: &str) -> Result<Table, CustomError> {
                     continue;
                 }
                 let register = clause.execute(line, &result.columns);
+
                 if !register.is_empty() {
                     result.registers.push(register);
                 }
             }
-            println!("{:?}", result.registers);
 
             if clause.orderby_clause.column != "" {
                 let registers_ordered = clause.orderby_clause.execute(&mut result.registers);
                 result.registers = registers_ordered;
             }
+            println!("{:?}", result.registers);
         }
         _ => todo!(),
     }

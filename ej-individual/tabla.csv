@@ -9,26 +9,3 @@ id,id_cliente,producto,cantidad
 108,4,Auriculares,1
 109,5,Laptop,1
 110,6,Teléfono,2
-
-SELECT producto, id_cliente WHERE cantidad > 2;
-
-select { columns: [producto, id_cliente], where: {operador: >, value: 2, column: cantidad}}
-
-line {
-    id: 101,
-    id_cliente: 1,
-    producto: Laptop,
-    cantidad: 1,
-}
-
-for {
-    let hash = select.execute(linea);
-}
-
-if line.get(where.column).unwrap() > where.value {
-    let hash = HashMap::new();
-    for col in self.columns {
-        hash.insert(col, line.get(col))
-    }
-    return hash;
-}

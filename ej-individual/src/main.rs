@@ -1,20 +1,38 @@
 use core::panic;
 use std::{
     collections::HashMap,
-    default,
     fs::File,
-    io::{self, BufRead, BufReader, Error},
-    result,
+    io::{BufRead, BufReader},
 };
 
+#[derive(Debug)]
 enum CustomError {
     ReaderError,
-    Main_Error,
+    FileError,
+    CsvError,
+}
+
+#[derive(Clone, Debug)]
+struct Register(HashMap<String, String>);
+
+impl Register {
+    fn to_csv(&self, columns: &Vec<String>) -> Result<String, CustomError> {
+        let mut values = Vec::new();
+
+        for col in columns {
+            let value = self.0.get(col).ok_or(CustomError::CsvError)?;
+            values.push(value.to_string());
+        }
+
+        let csv = values.join(",");
+
+        Ok(csv)
+    }
 }
 
 struct Table {
     columns: Vec<String>,
-    registers: Vec<HashMap<String, String>>,
+    registers: Vec<Register>,
 }
 
 impl Table {
@@ -116,21 +134,19 @@ impl OrderBy {
         Self { column, order }
     }
 
-    fn execute(
-        &self,
-        registers: &mut Vec<HashMap<String, String>>,
-    ) -> Vec<HashMap<String, String>> {
+    fn execute<'a>(&self, registers: &'a mut Vec<Register>) -> &'a Vec<Register> {
         registers.sort_by(|a, b| {
             let default = String::new();
-            let val_a = a.get(&self.column).unwrap_or(&default);
-            let val_b = b.get(&self.column).unwrap_or(&default);
+            let val_a = a.0.get(&self.column).unwrap_or(&default);
+            let val_b = b.0.get(&self.column).unwrap_or(&default);
             if self.order == "DESC" {
                 val_b.cmp(val_a)
             } else {
                 val_a.cmp(val_b)
             }
         });
-        registers.to_vec()
+
+        registers
     }
 }
 
@@ -192,10 +208,10 @@ impl Select {
         }
     }
 
-    fn execute(&self, line: String, columns: &Vec<String>) -> HashMap<String, String> {
+    fn execute(&self, line: String, columns: &Vec<String>) -> Register {
         let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
 
-        let mut register = HashMap::new();
+        let mut register = Register(HashMap::new()).0;
 
         for (idx, col) in columns.iter().enumerate() {
             register.insert(col.to_string(), atributes[idx].to_string());
@@ -212,12 +228,12 @@ impl Select {
             }
         }
 
-        let mut result = HashMap::new();
+        let mut result = Register(HashMap::new());
         let op_result = self.where_clause.execute(&register);
 
         if op_result == true {
             for col in col_selected {
-                result.insert(
+                result.0.insert(
                     col.to_string(),
                     register.get(&col).unwrap_or(&String::new()).to_string(),
                 );
@@ -289,11 +305,12 @@ fn parse(string: &str) -> Vec<String> {
     tokens
 }
 
-fn exec_query(file: File, query: &str) -> Result<Table, CustomError> {
+fn exec_query(file: File, query: &str) -> Result<Vec<String>, CustomError> {
     let reader = BufReader::new(file);
     let tokens = parse(query);
     let clause;
     let mut result = Table::new();
+    let mut register = Register(HashMap::new());
 
     match tokens[0].as_str() {
         "SELECT" => {
@@ -304,26 +321,40 @@ fn exec_query(file: File, query: &str) -> Result<Table, CustomError> {
                     result.columns = line.split(',').map(|s| s.to_string()).collect();
                     continue;
                 }
-                let register = clause.execute(line, &result.columns);
+                register = clause.execute(line, &result.columns);
 
-                if !register.is_empty() {
+                if !register.0.is_empty() {
                     result.registers.push(register);
                 }
             }
 
             if clause.orderby_clause.column != "" {
                 let registers_ordered = clause.orderby_clause.execute(&mut result.registers);
-                result.registers = registers_ordered;
+                result.registers = registers_ordered.to_vec();
             }
-            println!("{:?}", result.registers);
         }
         _ => todo!(),
+    }
+
+    let result_csv = serialize_result(result, clause.columns)?;
+
+    Ok(result_csv)
+}
+
+fn serialize_result(table: Table, column_order: Vec<String>) -> Result<Vec<String>, CustomError> {
+    let mut result: Vec<String> = Vec::new();
+
+    result.push(column_order.join(","));
+
+    for register in table.registers {
+        let register_csv = register.to_csv(&column_order)?;
+        result.push(register_csv);
     }
 
     Ok(result)
 }
 
-fn main() -> io::Result<()> {
+fn main() -> Result<(), CustomError> {
     let example = vec![
         "tabla.csv",
         "SELECT id, nombre, email FROM clientes WHERE apellido = 'López' ORDER BY email DESC;",
@@ -332,10 +363,13 @@ fn main() -> io::Result<()> {
     let table = example[0];
     let query = example[1];
 
-    let file = File::open(table)?;
+    let file = File::open(table).map_err(|e| CustomError::FileError)?;
 
-    match exec_query(file, query) {
-        Ok(_) => Ok(println!("Todo ok")),
-        Err(_) => todo!("Algo falló"),
+    let result = exec_query(file, query)?;
+
+    for line in result {
+        println!("{}", line);
     }
+
+    Ok(())
 }

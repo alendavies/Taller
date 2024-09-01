@@ -5,11 +5,12 @@ mod table;
 
 use std::{
     collections::HashMap,
-    fs::File,
+    fs::{File, OpenOptions},
     io::{BufRead, BufReader},
+    path::Path,
 };
 
-use clauses::select_sql::Select;
+use clauses::{insert_sql::Insert, select_sql::Select};
 use errors::CustomError;
 use register::Register;
 use table::Table;
@@ -59,6 +60,20 @@ fn parse(string: &str) -> Vec<String> {
                 current = String::new();
                 index += 1;
                 char = string.chars().nth(index).unwrap_or('0');
+            } else if char == '(' {
+                index += 1;
+                char = string.chars().nth(index).unwrap_or('0');
+
+                while char != ')' && index < length {
+                    current.push(char);
+                    index += 1;
+                    char = string.chars().nth(index).unwrap_or('0');
+                }
+
+                tokens.push(current);
+                current = String::new();
+                index += 1;
+                char = string.chars().nth(index).unwrap_or('0');
             } else {
                 while !char.is_alphanumeric() && !char.is_whitespace() && index < length {
                     current.push(char);
@@ -75,16 +90,36 @@ fn parse(string: &str) -> Vec<String> {
     tokens
 }
 
-fn exec_query(file: File, query: &str) -> Result<Vec<String>, CustomError> {
-    let reader = BufReader::new(file);
+/* fn find_file_in_folder(folder_path: &str, file_name: &str) -> Option<String> {
+    let path = Path::new(folder_path);
+
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let entry_path = entry.path();
+                if let Some(name) = entry_path.file_name() {
+                    if name == file_name {
+                        return Some(entry_path.to_string_lossy().into_owned());
+                    }
+                }
+            }
+        }
+    }
+
+    None
+} */
+
+fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>, CustomError> {
     let tokens = parse(query);
-    let clause;
     let mut result = Table::new();
     let mut register = Register(HashMap::new());
+    let mut result_csv = Vec::new();
 
-    match tokens[0].as_str() {
+    match tokens.first().ok_or(CustomError::Error)?.as_str() {
         "SELECT" => {
-            clause = Select::new_from_tokens(tokens);
+            let file = File::open(file_path).map_err(|e| CustomError::FileError)?;
+            let reader = BufReader::new(file);
+            let clause = Select::new_from_tokens(tokens);
             for (idx, line) in reader.lines().enumerate() {
                 let line = line.map_err(|_| CustomError::ReaderError)?;
                 if idx == 0 {
@@ -102,11 +137,22 @@ fn exec_query(file: File, query: &str) -> Result<Vec<String>, CustomError> {
                 let registers_ordered = clause.orderby_clause.execute(&mut result.registers);
                 result.registers = registers_ordered.to_vec();
             }
+
+            result_csv = serialize_result(result, clause.columns)?;
+        }
+        "INSERT" => {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .append(true)
+                .open(file_path)
+                .map_err(|e| CustomError::Error)?;
+
+            let clause = Insert::new_from_tokens(tokens);
+
+            clause.execute(&mut file)?;
         }
         _ => todo!(),
     }
-
-    let result_csv = serialize_result(result, clause.columns)?;
 
     Ok(result_csv)
 }
@@ -127,15 +173,18 @@ fn serialize_result(table: Table, column_order: Vec<String>) -> Result<Vec<Strin
 fn main() -> Result<(), CustomError> {
     let example = vec![
         "tabla.csv",
-        "SELECT id, nombre, email FROM clientes WHERE apellido = 'López' ORDER BY email DESC;",
+        "INSERT INTO ordenes (id, id_cliente, producto, cantidad) VALUES (111, 6, 'Laptop', 3);
+",
     ];
+
+    let folder_path = "./";
+
+    let folder = Path::new(folder_path);
 
     let table = example[0];
     let query = example[1];
 
-    let file = File::open(table).map_err(|e| CustomError::FileError)?;
-
-    let result = exec_query(file, query)?;
+    let result = exec_query(table, query, folder)?;
 
     for line in result {
         println!("{}", line);

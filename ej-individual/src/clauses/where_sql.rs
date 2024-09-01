@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
-enum Operator {
+pub enum Operator {
     Equal,
     Greater,
     Less,
 }
 
 pub struct Where {
-    column: String,
-    operator: Operator,
-    value: String,
+    pub column: String,
+    pub operator: Operator,
+    pub value: String,
 }
 
 fn is_operator(c: char) -> bool {
@@ -18,13 +18,18 @@ fn is_operator(c: char) -> bool {
 
 impl Where {
     pub fn new_from_tokens(tokens: Vec<&str>) -> Self {
-        if tokens.len() < 1 {
-            println!("Error al crear where");
-        }
-
         let mut column = String::new();
         let mut value = String::new();
         let mut operator = Operator::Equal;
+
+        if tokens.len() < 1 {
+            return Self {
+                column,
+                value,
+                operator,
+            };
+        }
+
         let mut i = 0;
 
         while i < tokens.len() {

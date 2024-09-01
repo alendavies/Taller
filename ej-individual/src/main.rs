@@ -11,6 +11,7 @@ use std::{
     path::Path,
 };
 
+use clauses::update_sql::Update;
 use clauses::{delete_sql::Delete, insert_sql::Insert, select_sql::Select};
 use errors::{CustomError, SqlError};
 use register::Register;
@@ -184,7 +185,36 @@ fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>
             fs::rename("temp.txt", file_path)
                 .map_err(|_| SqlError::Error(CustomError::FileError))?;
         }
-        _ => todo!(),
+        "UPDATE" => {
+            let file = File::open(file_path).map_err(|_| SqlError::InvalidTable)?;
+            let reader = BufReader::new(file);
+
+            let clause = Update::new_from_tokens(tokens);
+
+            for (idx, line) in reader.lines().enumerate() {
+                let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
+                if idx == 0 {
+                    result.columns = line.split(',').map(|s| s.to_string()).collect();
+                    continue;
+                }
+                register = clause.execute(line, &result.columns);
+
+                if !register.0.is_empty() {
+                    result.registers.push(register);
+                }
+            }
+
+            let csv = serialize_result(&result, &result.columns)?;
+            let mut temp_file =
+                File::create("temp.txt").map_err(|_| SqlError::Error(CustomError::FileError))?;
+            for line in csv {
+                writeln!(temp_file, "{}", line)
+                    .map_err(|_| SqlError::Error(CustomError::WriteError))?;
+            }
+            fs::rename("temp.txt", file_path)
+                .map_err(|_| SqlError::Error(CustomError::FileError))?;
+        }
+        _ => println!("Error al parsear query"),
     }
 
     Ok(result_csv)
@@ -206,8 +236,7 @@ fn serialize_result(table: &Table, column_order: &Vec<String>) -> Result<Vec<Str
 fn main() -> Result<(), SqlError> {
     let example = vec![
         "tabla.csv",
-        "DELETE FROM tabla;
-",
+        "UPDATE clientes SET email = 'mrodriguez@hotmail.com' WHERE id = 4;",
     ];
 
     let folder_path = "./";

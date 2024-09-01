@@ -12,7 +12,7 @@ use std::{
 };
 
 use clauses::{delete_sql::Delete, insert_sql::Insert, select_sql::Select};
-use errors::CustomError;
+use errors::{CustomError, SqlError};
 use register::Register;
 use table::Table;
 
@@ -111,21 +111,21 @@ fn parse(string: &str) -> Vec<String> {
     None
 } */
 
-fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>, CustomError> {
+fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>, SqlError> {
     let tokens = parse(query);
     let mut result = Table::new();
     let mut register = Register(HashMap::new());
     let mut result_csv = Vec::new();
 
-    match tokens.first().ok_or(CustomError::Error)?.as_str() {
+    match tokens.first().ok_or(SqlError::InvalidSyntax)?.as_str() {
         "SELECT" => {
-            let file = File::open(file_path).map_err(|_| CustomError::FileError)?;
+            let file = File::open(file_path).map_err(|_| SqlError::InvalidTable)?;
             let reader = BufReader::new(file);
 
             let clause = Select::new_from_tokens(tokens);
 
             for (idx, line) in reader.lines().enumerate() {
-                let line = line.map_err(|_| CustomError::ReaderError)?;
+                let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
                 if idx == 0 {
                     result.columns = line.split(',').map(|s| s.to_string()).collect();
                     continue;
@@ -149,20 +149,20 @@ fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>
                 .write(true)
                 .append(true)
                 .open(file_path)
-                .map_err(|e| CustomError::Error)?;
+                .map_err(|_| SqlError::InvalidTable)?;
 
             let clause = Insert::new_from_tokens(tokens);
 
             clause.execute(&mut file)?;
         }
         "DELETE" => {
-            let file = File::open(file_path).map_err(|_| CustomError::FileError)?;
+            let file = File::open(file_path).map_err(|_| SqlError::InvalidTable)?;
             let reader = BufReader::new(file);
 
             let clause = Delete::new_from_tokens(tokens);
 
             for (idx, line) in reader.lines().enumerate() {
-                let line = line.map_err(|_| CustomError::ReaderError)?;
+                let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
                 if idx == 0 {
                     result.columns = line.split(',').map(|s| s.to_string()).collect();
                     continue;
@@ -175,11 +175,14 @@ fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>
             }
 
             let csv = serialize_result(&result, &result.columns)?;
-            let mut temp_file = File::create("temp.txt").map_err(|_| CustomError::FileError)?;
+            let mut temp_file =
+                File::create("temp.txt").map_err(|_| SqlError::Error(CustomError::FileError))?;
             for line in csv {
-                writeln!(temp_file, "{}", line).map_err(|_| CustomError::FileError)?;
+                writeln!(temp_file, "{}", line)
+                    .map_err(|_| SqlError::Error(CustomError::WriteError))?;
             }
-            fs::rename("temp.txt", file_path).map_err(|_| CustomError::FileError)?;
+            fs::rename("temp.txt", file_path)
+                .map_err(|_| SqlError::Error(CustomError::FileError))?;
         }
         _ => todo!(),
     }
@@ -187,7 +190,7 @@ fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>
     Ok(result_csv)
 }
 
-fn serialize_result(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, CustomError> {
+fn serialize_result(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, SqlError> {
     let mut result: Vec<String> = Vec::new();
 
     result.push(column_order.join(","));
@@ -200,7 +203,7 @@ fn serialize_result(table: &Table, column_order: &Vec<String>) -> Result<Vec<Str
     Ok(result)
 }
 
-fn main() -> Result<(), CustomError> {
+fn main() -> Result<(), SqlError> {
     let example = vec![
         "tabla.csv",
         "DELETE FROM tabla;

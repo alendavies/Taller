@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::Write;
 
-use crate::errors::CustomError;
+use crate::errors::{CustomError, SqlError};
 pub struct Into {
     table_name: String,
     columns: Vec<String>,
@@ -79,9 +79,9 @@ impl Insert {
         }
     }
 
-    pub fn execute(&self, file: &mut File) -> Result<(), CustomError> {
+    pub fn execute(&self, file: &mut File) -> Result<(), SqlError> {
         let line = self.values.join(",");
-        writeln!(file, "{}", line).map_err(|e| CustomError::Error)?;
+        writeln!(file, "{}", line).map_err(|_| SqlError::Error(CustomError::WriteError))?;
 
         Ok(())
     }

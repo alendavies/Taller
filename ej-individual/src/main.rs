@@ -3,14 +3,15 @@ mod errors;
 mod register;
 mod table;
 
+use std::io::Write;
 use std::{
     collections::HashMap,
-    fs::{File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{BufRead, BufReader},
     path::Path,
 };
 
-use clauses::{insert_sql::Insert, select_sql::Select};
+use clauses::{delete_sql::Delete, insert_sql::Insert, select_sql::Select};
 use errors::CustomError;
 use register::Register;
 use table::Table;
@@ -36,6 +37,7 @@ fn parse(string: &str) -> Vec<String> {
             current = String::new();
         } else if char.is_numeric() {
             while char.is_numeric() && index < length {
+                current.push(char);
                 index += 1;
                 char = string.chars().nth(index).unwrap_or('0');
             }
@@ -117,9 +119,11 @@ fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>
 
     match tokens.first().ok_or(CustomError::Error)?.as_str() {
         "SELECT" => {
-            let file = File::open(file_path).map_err(|e| CustomError::FileError)?;
+            let file = File::open(file_path).map_err(|_| CustomError::FileError)?;
             let reader = BufReader::new(file);
+
             let clause = Select::new_from_tokens(tokens);
+
             for (idx, line) in reader.lines().enumerate() {
                 let line = line.map_err(|_| CustomError::ReaderError)?;
                 if idx == 0 {
@@ -138,7 +142,7 @@ fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>
                 result.registers = registers_ordered.to_vec();
             }
 
-            result_csv = serialize_result(result, clause.columns)?;
+            result_csv = serialize_result(&result, &clause.columns)?;
         }
         "INSERT" => {
             let mut file = OpenOptions::new()
@@ -151,18 +155,44 @@ fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>
 
             clause.execute(&mut file)?;
         }
+        "DELETE" => {
+            let file = File::open(file_path).map_err(|_| CustomError::FileError)?;
+            let reader = BufReader::new(file);
+
+            let clause = Delete::new_from_tokens(tokens);
+
+            for (idx, line) in reader.lines().enumerate() {
+                let line = line.map_err(|_| CustomError::ReaderError)?;
+                if idx == 0 {
+                    result.columns = line.split(',').map(|s| s.to_string()).collect();
+                    continue;
+                }
+                register = clause.execute(line, &result.columns);
+
+                if !register.0.is_empty() {
+                    result.registers.push(register);
+                }
+            }
+
+            let csv = serialize_result(&result, &result.columns)?;
+            let mut temp_file = File::create("temp.txt").map_err(|_| CustomError::FileError)?;
+            for line in csv {
+                writeln!(temp_file, "{}", line).map_err(|_| CustomError::FileError)?;
+            }
+            fs::rename("temp.txt", file_path).map_err(|_| CustomError::FileError)?;
+        }
         _ => todo!(),
     }
 
     Ok(result_csv)
 }
 
-fn serialize_result(table: Table, column_order: Vec<String>) -> Result<Vec<String>, CustomError> {
+fn serialize_result(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, CustomError> {
     let mut result: Vec<String> = Vec::new();
 
     result.push(column_order.join(","));
 
-    for register in table.registers {
+    for register in &table.registers {
         let register_csv = register.to_csv(&column_order)?;
         result.push(register_csv);
     }
@@ -173,7 +203,7 @@ fn serialize_result(table: Table, column_order: Vec<String>) -> Result<Vec<Strin
 fn main() -> Result<(), CustomError> {
     let example = vec![
         "tabla.csv",
-        "INSERT INTO ordenes (id, id_cliente, producto, cantidad) VALUES (111, 6, 'Laptop', 3);
+        "DELETE FROM tabla;
 ",
     ];
 

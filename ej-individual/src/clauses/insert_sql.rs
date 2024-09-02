@@ -1,7 +1,8 @@
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 
 use crate::errors::{CustomError, SqlError};
+use crate::utils::find_file_in_folder;
 pub struct Into {
     table_name: String,
     columns: Vec<String>,
@@ -79,7 +80,22 @@ impl Insert {
         }
     }
 
-    pub fn execute(&self, file: &mut File) -> Result<(), SqlError> {
+    pub fn open_table(&self, folder_path: &str) -> Result<File, SqlError> {
+        let table_name = self.into_clause.table_name.to_string() + ".csv";
+        if !find_file_in_folder(folder_path, &table_name) {
+            return Err(SqlError::InvalidTable);
+        }
+        let table_path = folder_path.to_string() + "/" + &table_name;
+        let file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(&table_path)
+            .map_err(|_| SqlError::InvalidTable)?;
+
+        Ok(file)
+    }
+
+    pub fn apply_to_table(&self, file: &mut File) -> Result<(), SqlError> {
         let line = self.values.join(",");
         writeln!(file, "{}", line).map_err(|_| SqlError::Error(CustomError::WriteError))?;
 

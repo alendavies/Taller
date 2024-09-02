@@ -1,6 +1,17 @@
 use super::where_sql::Where;
-use crate::register::Register;
-use std::collections::HashMap;
+use crate::{
+    errors::{CustomError, SqlError},
+    register::Register,
+    table::Table,
+    utils::find_file_in_folder,
+};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::{BufRead, BufReader},
+};
+
+use std::io::Write;
 
 pub struct Set(Vec<(String, String)>);
 
@@ -107,5 +118,50 @@ impl Update {
         }
 
         register
+    }
+
+    pub fn apply_to_table(&self, table: BufReader<File>) -> Result<Table, SqlError> {
+        let mut result = Table::new();
+
+        for (idx, line) in table.lines().enumerate() {
+            let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
+            if idx == 0 {
+                result.columns = line.split(',').map(|s| s.to_string()).collect();
+                continue;
+            }
+            let register = self.execute(line, &result.columns);
+
+            if !register.0.is_empty() {
+                result.registers.push(register);
+            }
+        }
+        Ok(result)
+    }
+
+    pub fn write_table(&self, csv: Vec<String>, folder_path: &str) -> Result<(), SqlError> {
+        let temp_file_path = folder_path.to_string() + "/" + "temp.csv";
+        let mut temp_file =
+            File::create(&temp_file_path).map_err(|_| SqlError::Error(CustomError::FileError))?;
+        for line in csv {
+            writeln!(temp_file, "{}", line)
+                .map_err(|_| SqlError::Error(CustomError::WriteError))?;
+        }
+        let path = folder_path.to_string() + "/" + &self.table_name + ".csv";
+        fs::rename(&temp_file_path, path).map_err(|_| SqlError::Error(CustomError::FileError))?;
+
+        Ok(())
+    }
+
+    pub fn open_table(&self, folder_path: &str) -> Result<BufReader<File>, SqlError> {
+        let table_name = self.table_name.to_string() + ".csv";
+        if !find_file_in_folder(folder_path, &table_name) {
+            return Err(SqlError::InvalidTable);
+        }
+        let table_path = folder_path.to_string() + "/" + &table_name;
+        let file = File::open(&table_path).map_err(|_| SqlError::InvalidTable)?;
+
+        let reader = BufReader::new(file);
+
+        Ok(reader)
     }
 }

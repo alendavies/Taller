@@ -1,10 +1,20 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader},
+};
 
-use crate::register::Register;
+use crate::{
+    errors::{CustomError, SqlError},
+    register::Register,
+    table::Table,
+    utils::find_file_in_folder,
+};
 
 use super::{orderby_sql::OrderBy, where_sql::Where};
 
 pub struct Select {
+    pub table_name: String,
     pub columns: Vec<String>,
     pub where_clause: Where,
     pub orderby_clause: OrderBy,
@@ -21,6 +31,7 @@ impl Select {
         let mut orderby_tokens: Vec<&str> = Vec::new();
 
         let mut i = 0;
+        let mut table_name = String::new();
 
         if tokens[i] == "SELECT" {
             i += 1;
@@ -28,8 +39,13 @@ impl Select {
                 columns.push(tokens[i].as_str());
                 i += 1;
             }
-            i += 2;
         }
+        if tokens[i] == "FROM" {
+            i += 1;
+            table_name = tokens[i].to_string();
+        }
+        i += 1;
+
         if tokens[i] == "WHERE" {
             i += 1;
             if tokens.contains(&String::from("ORDER")) {
@@ -56,10 +72,35 @@ impl Select {
         let orderby_clause = OrderBy::new_from_tokens(orderby_tokens);
 
         Self {
+            table_name,
             columns: columns.iter().map(|c| c.to_string()).collect(),
             where_clause,
             orderby_clause,
         }
+    }
+
+    pub fn apply_to_table(&self, table: BufReader<File>) -> Result<Table, SqlError> {
+        let mut result = Table::new();
+
+        for (idx, line) in table.lines().enumerate() {
+            let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
+            if idx == 0 {
+                result.columns = line.split(',').map(|s| s.to_string()).collect();
+                continue;
+            }
+            let register = self.execute(line, &result.columns);
+
+            if !register.0.is_empty() {
+                result.registers.push(register);
+            }
+        }
+
+        if self.orderby_clause.column != "" {
+            let registers_ordered = self.orderby_clause.execute(&mut result.registers);
+            result.registers = registers_ordered.to_vec();
+        }
+
+        Ok(result)
     }
 
     pub fn execute(&self, line: String, columns: &Vec<String>) -> Register {
@@ -95,5 +136,18 @@ impl Select {
         }
 
         result
+    }
+
+    pub fn open_table(&self, folder_path: &str) -> Result<BufReader<File>, SqlError> {
+        let table_name = self.table_name.to_string() + ".csv";
+        if !find_file_in_folder(folder_path, &table_name) {
+            return Err(SqlError::InvalidTable);
+        }
+        let table_path = folder_path.to_string() + "/" + &table_name;
+        let file = File::open(&table_path).map_err(|_| SqlError::InvalidTable)?;
+
+        let reader = BufReader::new(file);
+
+        Ok(reader)
     }
 }

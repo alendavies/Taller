@@ -2,19 +2,13 @@ mod clauses;
 mod errors;
 mod register;
 mod table;
+mod utils;
 
-use std::io::Write;
-use std::{
-    collections::HashMap,
-    fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader},
-    path::Path,
-};
+use std::env;
 
 use clauses::update_sql::Update;
 use clauses::{delete_sql::Delete, insert_sql::Insert, select_sql::Select};
 use errors::{CustomError, SqlError};
-use register::Register;
 use table::Table;
 
 fn parse(string: &str) -> Vec<String> {
@@ -93,126 +87,45 @@ fn parse(string: &str) -> Vec<String> {
     tokens
 }
 
-/* fn find_file_in_folder(folder_path: &str, file_name: &str) -> Option<String> {
-    let path = Path::new(folder_path);
-
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let entry_path = entry.path();
-                if let Some(name) = entry_path.file_name() {
-                    if name == file_name {
-                        return Some(entry_path.to_string_lossy().into_owned());
-                    }
-                }
-            }
-        }
-    }
-
-    None
-} */
-
-fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>, SqlError> {
+fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
     let tokens = parse(query);
     let mut result = Table::new();
-    let mut register = Register(HashMap::new());
     let mut result_csv = Vec::new();
 
     match tokens.first().ok_or(SqlError::InvalidSyntax)?.as_str() {
         "SELECT" => {
-            let file = File::open(file_path).map_err(|_| SqlError::InvalidTable)?;
-            let reader = BufReader::new(file);
-
             let clause = Select::new_from_tokens(tokens);
+            let table = clause.open_table(folder_path)?;
 
-            for (idx, line) in reader.lines().enumerate() {
-                let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
-                if idx == 0 {
-                    result.columns = line.split(',').map(|s| s.to_string()).collect();
-                    continue;
-                }
-                register = clause.execute(line, &result.columns);
+            result = clause.apply_to_table(table)?;
 
-                if !register.0.is_empty() {
-                    result.registers.push(register);
-                }
-            }
-
-            if clause.orderby_clause.column != "" {
-                let registers_ordered = clause.orderby_clause.execute(&mut result.registers);
-                result.registers = registers_ordered.to_vec();
-            }
-
-            result_csv = serialize_result(&result, &clause.columns)?;
+            result_csv = result_to_csv(&result, &clause.columns)?;
         }
         "INSERT" => {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .append(true)
-                .open(file_path)
-                .map_err(|_| SqlError::InvalidTable)?;
-
             let clause = Insert::new_from_tokens(tokens);
+            let mut file = clause.open_table(folder_path)?;
 
-            clause.execute(&mut file)?;
+            clause.apply_to_table(&mut file)?;
         }
         "DELETE" => {
-            let file = File::open(file_path).map_err(|_| SqlError::InvalidTable)?;
-            let reader = BufReader::new(file);
-
             let clause = Delete::new_from_tokens(tokens);
+            let table = clause.open_table(folder_path)?;
 
-            for (idx, line) in reader.lines().enumerate() {
-                let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
-                if idx == 0 {
-                    result.columns = line.split(',').map(|s| s.to_string()).collect();
-                    continue;
-                }
-                register = clause.execute(line, &result.columns);
+            result = clause.apply_to_table(table)?;
 
-                if !register.0.is_empty() {
-                    result.registers.push(register);
-                }
-            }
+            let csv = result_to_csv(&result, &result.columns)?;
 
-            let csv = serialize_result(&result, &result.columns)?;
-            let mut temp_file =
-                File::create("temp.txt").map_err(|_| SqlError::Error(CustomError::FileError))?;
-            for line in csv {
-                writeln!(temp_file, "{}", line)
-                    .map_err(|_| SqlError::Error(CustomError::WriteError))?;
-            }
-            fs::rename("temp.txt", file_path)
-                .map_err(|_| SqlError::Error(CustomError::FileError))?;
+            clause.write_table(csv, folder_path)?;
         }
         "UPDATE" => {
-            let file = File::open(file_path).map_err(|_| SqlError::InvalidTable)?;
-            let reader = BufReader::new(file);
-
             let clause = Update::new_from_tokens(tokens);
+            let table = clause.open_table(folder_path)?;
 
-            for (idx, line) in reader.lines().enumerate() {
-                let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
-                if idx == 0 {
-                    result.columns = line.split(',').map(|s| s.to_string()).collect();
-                    continue;
-                }
-                register = clause.execute(line, &result.columns);
+            result = clause.apply_to_table(table)?;
 
-                if !register.0.is_empty() {
-                    result.registers.push(register);
-                }
-            }
+            let csv = result_to_csv(&result, &result.columns)?;
 
-            let csv = serialize_result(&result, &result.columns)?;
-            let mut temp_file =
-                File::create("temp.txt").map_err(|_| SqlError::Error(CustomError::FileError))?;
-            for line in csv {
-                writeln!(temp_file, "{}", line)
-                    .map_err(|_| SqlError::Error(CustomError::WriteError))?;
-            }
-            fs::rename("temp.txt", file_path)
-                .map_err(|_| SqlError::Error(CustomError::FileError))?;
+            clause.write_table(csv, folder_path)?;
         }
         _ => println!("Error al parsear query"),
     }
@@ -220,7 +133,7 @@ fn exec_query(file_path: &str, query: &str, folder: &Path) -> Result<Vec<String>
     Ok(result_csv)
 }
 
-fn serialize_result(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, SqlError> {
+fn result_to_csv(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, SqlError> {
     let mut result: Vec<String> = Vec::new();
 
     result.push(column_order.join(","));
@@ -239,14 +152,9 @@ fn main() -> Result<(), SqlError> {
         "UPDATE clientes SET email = 'mrodriguez@hotmail.com' WHERE id = 4;",
     ];
 
-    let folder_path = "./";
+    let args: Vec<String> = env::args().collect();
 
-    let folder = Path::new(folder_path);
-
-    let table = example[0];
-    let query = example[1];
-
-    let result = exec_query(table, query, folder)?;
+    let result = exec_query(&args[1], &args[2])?;
 
     for line in result {
         println!("{}", line);

@@ -8,10 +8,10 @@ use std::env;
 
 use clauses::update_sql::Update;
 use clauses::{delete_sql::Delete, insert_sql::Insert, select_sql::Select};
-use errors::{CustomError, SqlError};
+use errors::SqlError;
 use table::Table;
 
-fn parse(string: &str) -> Vec<String> {
+fn tokens_from_query(string: &str) -> Vec<String> {
     let mut index = 0;
     let mut tokens = Vec::new();
     let mut current = String::new();
@@ -88,8 +88,7 @@ fn parse(string: &str) -> Vec<String> {
 }
 
 fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
-    let tokens = parse(query);
-    let mut result = Table::new();
+    let tokens = tokens_from_query(query);
     let mut result_csv = Vec::new();
 
     match tokens.first().ok_or(SqlError::InvalidSyntax)?.as_str() {
@@ -97,9 +96,9 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
             let clause = Select::new_from_tokens(tokens);
             let table = clause.open_table(folder_path)?;
 
-            result = clause.apply_to_table(table)?;
+            let result = clause.apply_to_table(table)?;
 
-            result_csv = result_to_csv(&result, &clause.columns)?;
+            result_csv = table_to_csv(&result, &clause.columns)?;
         }
         "INSERT" => {
             let clause = Insert::new_from_tokens(tokens);
@@ -111,9 +110,9 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
             let clause = Delete::new_from_tokens(tokens);
             let table = clause.open_table(folder_path)?;
 
-            result = clause.apply_to_table(table)?;
+            let result = clause.apply_to_table(table)?;
 
-            let csv = result_to_csv(&result, &result.columns)?;
+            let csv = table_to_csv(&result, &result.columns)?;
 
             clause.write_table(csv, folder_path)?;
         }
@@ -121,19 +120,21 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
             let clause = Update::new_from_tokens(tokens);
             let table = clause.open_table(folder_path)?;
 
-            result = clause.apply_to_table(table)?;
+            let result = clause.apply_to_table(table)?;
 
-            let csv = result_to_csv(&result, &result.columns)?;
+            let csv = table_to_csv(&result, &result.columns)?;
 
             clause.write_table(csv, folder_path)?;
         }
-        _ => println!("Error al parsear query"),
+        _ => {
+            println!("Error al parsear query");
+            return Err(SqlError::InvalidSyntax);
+        }
     }
-
     Ok(result_csv)
 }
 
-fn result_to_csv(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, SqlError> {
+fn table_to_csv(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, SqlError> {
     let mut result: Vec<String> = Vec::new();
 
     result.push(column_order.join(","));
@@ -147,11 +148,6 @@ fn result_to_csv(table: &Table, column_order: &Vec<String>) -> Result<Vec<String
 }
 
 fn main() -> Result<(), SqlError> {
-    let example = vec![
-        "tabla.csv",
-        "UPDATE clientes SET email = 'mrodriguez@hotmail.com' WHERE id = 4;",
-    ];
-
     let args: Vec<String> = env::args().collect();
 
     let result = exec_query(&args[1], &args[2])?;

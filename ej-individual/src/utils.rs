@@ -13,3 +13,7 @@ pub fn find_file_in_folder(folder_path: &str, file_name: &str) -> bool {
     }
     false
 }
+
+pub fn is_operator(c: char) -> bool {
+    matches!(c, '+' | '-' | '*' | '/' | '%' | '=' | '<' | '>')
+}

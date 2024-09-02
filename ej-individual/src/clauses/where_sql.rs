@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::utils::is_operator;
+
 pub enum Operator {
     Equal,
     Greater,
@@ -10,10 +12,6 @@ pub struct Where {
     pub column: String,
     pub operator: Operator,
     pub value: String,
-}
-
-fn is_operator(c: char) -> bool {
-    matches!(c, '+' | '-' | '*' | '/' | '%' | '=' | '<' | '>')
 }
 
 impl Where {

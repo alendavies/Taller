@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::errors::{CustomError, SqlError};
+use crate::errors::SqlError;
 
 #[derive(Clone, Debug)]
 pub struct Register(pub HashMap<String, String>);
@@ -10,10 +10,7 @@ impl Register {
         let mut values = Vec::new();
 
         for col in columns {
-            let value = self
-                .0
-                .get(col)
-                .ok_or(SqlError::Error(CustomError::HashError))?;
+            let value = self.0.get(col).ok_or(SqlError::Error)?;
             values.push(value.to_string());
         }
 

@@ -164,25 +164,62 @@ mod tests {
     use crate::clauses::recursive_parser::{parse_condition, Condition, LogicalOperator, Operator};
 
     #[test]
-    fn simple_condition() {
-        // city = 'Gaiman'
-        let tokens = vec!["city", "=", "Gaiman"];
+    fn simple_conditions() {
         let pos = 0;
-        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        let tokens1 = vec!["city", "=", "Gaiman"];
+        let tokens2 = vec!["age", "<", "30"];
+        let tokens3 = vec!["age", ">", "18"];
+        let (condition1, _) = parse_condition(&tokens1, pos).unwrap();
+        let (condition2, _) = parse_condition(&tokens2, pos).unwrap();
+        let (condition3, _) = parse_condition(&tokens3, pos).unwrap();
 
         assert_eq!(
-            condition,
+            condition1,
             Condition::Simple {
                 field: String::from("city"),
                 operator: Operator::Equal,
                 value: String::from("Gaiman"),
             }
+        );
+        assert_eq!(
+            condition2,
+            Condition::Simple {
+                field: String::from("age"),
+                operator: Operator::Lesser,
+                value: String::from("30"),
+            }
+        );
+        assert_eq!(
+            condition3,
+            Condition::Simple {
+                field: String::from("age"),
+                operator: Operator::Greater,
+                value: String::from("18"),
+            }
+        );
+    }
+
+    #[test]
+    fn not() {
+        let tokens = vec!["NOT", "city", "=", "Gaiman"];
+        let pos = 0;
+        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        assert_eq!(
+            condition,
+            Condition::Complex {
+                left: None,
+                operator: LogicalOperator::Not,
+                right: Box::new(Condition::Simple {
+                    field: String::from("city"),
+                    operator: Operator::Equal,
+                    value: String::from("Gaiman")
+                })
+            }
         )
     }
 
     #[test]
-    fn simple_or() {
-        // city = 'Gaiman' OR age < 30
+    fn one_or() {
         let tokens = vec!["city", "=", "Gaiman", "OR", "age", "<", "30"];
         let pos = 0;
         let (condition, _) = parse_condition(&tokens, pos).unwrap();
@@ -205,8 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn double_or() {
-        // city = 'Gaiman' OR age < 30 OR lastname = 'Davies'
+    fn two_or() {
         let tokens = vec![
             "city", "=", "Gaiman", "OR", "age", "<", "30", "OR", "lastname", "=", "Davies",
         ];
@@ -239,8 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_and() {
-        // city = 'Gaiman' AND age < 30
+    fn one_and() {
         let tokens = vec!["city", "=", "Gaiman", "AND", "age", "<", "30"];
         let pos = 0;
         let (condition, _) = parse_condition(&tokens, pos).unwrap();
@@ -263,8 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn double_and() {
-        // city = 'Gaiman' AND age < 30 AND lastname = 'Davies'
+    fn two_and() {
         let tokens = vec![
             "city", "=", "Gaiman", "AND", "age", "<", "30", "AND", "lastname", "=", "Davies",
         ];
@@ -296,181 +330,36 @@ mod tests {
         )
     }
 
-    /* #[test]
-       fn simple_not() {
-           // NOT name = "Luca"
-           let mut parser = Parser::new(vec![
-               Token::Not,
-               Token::Identifier("name".to_string()),
-               Token::Equal,
-               Token::String("Luca".to_string()),
-           ]);
-           let expression = expression(&mut parser).unwrap();
-           assert_eq!(
-               expression,
-               Restriction::Not(Box::new(Restriction::Comparison(Comparison::Equal {
-                   column: "name".to_string(),
-                   value: Value::String("Luca".to_string())
-               })))
-           )
-       }
-
-       #[test]
-       fn nested_not_is_fine() {
-           // NOT NOT NOT name = "Luca"
-           let mut parser = Parser::new(vec![
-               Token::Not,
-               Token::Not,
-               Token::Not,
-               Token::Identifier("name".to_string()),
-               Token::Equal,
-               Token::String("Luca".to_string()),
-           ]);
-           let expression = expression(&mut parser).unwrap();
-           assert_eq!(
-               expression,
-               Restriction::Not(Box::new(Restriction::Not(Box::new(Restriction::Not(
-                   Box::new(Restriction::Comparison(Comparison::Equal {
-                       column: "name".to_string(),
-                       value: Value::String("Luca".to_string())
-                   }))
-               )))))
-           )
-       }
-
-       #[test]
-       fn mixed_and_or_not() {
-           // name = "Luca" AND padron = 107044 OR age > 23 AND materia = "taller"
-           // (name = "Luca" AND padron = 107044)
-           let mut parser = Parser::new(vec![
-               Token::Identifier("name".to_string()),
-               Token::Equal,
-               Token::String("Luca".to_string()),
-               Token::And,
-               Token::Identifier("padron".to_string()),
-               Token::Equal,
-               Token::Integer(107044),
-               Token::Or,
-               Token::Identifier("age".to_string()),
-               Token::Greater,
-               Token::Integer(23),
-               Token::And,
-               Token::Identifier("materia".to_string()),
-               Token::Equal,
-               Token::String("taller".to_string()),
-           ]);
-           let expression = expression(&mut parser).unwrap();
-           assert_eq!(
-               expression,
-               Restriction::Or {
-                   left: Box::new(Restriction::And {
-                       left: Box::new(Restriction::Comparison(Comparison::Equal {
-                           column: "name".to_string(),
-                           value: Value::String("Luca".to_string())
-                       })),
-                       right: Box::new(Restriction::Comparison(Comparison::Equal {
-                           column: "padron".to_string(),
-                           value: Value::Integer(107044)
-                       }))
-                   }),
-                   right: Box::new(Restriction::And {
-                       left: Box::new(Restriction::Comparison(Comparison::Greater {
-                           column: "age".to_string(),
-                           value: Value::Integer(23)
-                       })),
-                       right: Box::new(Restriction::Comparison(Comparison::Equal {
-                           column: "materia".to_string(),
-                           value: Value::String("taller".to_string())
-                       })),
-                   })
-               }
-           )
-           //         assertion `left == right` failed
-           //   left: Or { left: And { left: Comparison(Equal { column: "name", value: String("Luca") }), right: Comparison(Equal { column: "padron", value: Integer(107044) }) }, right: And { left: Comparison(Greater { column: "age", value: Integer(23) }), right: Comparison(Equal { column: "materia", value: String("taller") }) } }
-           //  right: Or { left: And { left: Comparison(Equal { column: "name", value: String("Luca") }), right: Comparison(Equal { column: "padron", value: Integer(107044) }) }, right: And { left: Comparison(Equal { column: "materia", value: String("taller") }), right: Comparison(Greater { column: "age", value: Integer(23) }) } }
-       }
-    */
-    /* #[test]
-    fn nested_and_or_not() {
-        //
-    }
-
     #[test]
-    fn parens_respect_precedence() {
-        // birth = "SF" AND name = "Baker" OR "Yorgos"
-        // equals
-        // (birth = "SF" AND name = "Baker") OR "Yorgos"
+    fn and_or() {
+        let tokens = vec![
+            "city", "=", "Gaiman", "AND", "age", ">", "18", "OR", "lastname", "=", "Davies",
+        ];
+        let pos = 0;
+        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        assert_eq!(
+            condition,
+            Condition::Complex {
+                left: Some(Box::new(Condition::Complex {
+                    left: Some(Box::new(Condition::Simple {
+                        field: String::from("city"),
+                        operator: Operator::Equal,
+                        value: String::from("Gaiman")
+                    })),
+                    operator: LogicalOperator::And,
+                    right: Box::new(Condition::Simple {
+                        field: String::from("age"),
+                        operator: Operator::Greater,
+                        value: String::from("18")
+                    })
+                })),
+                operator: LogicalOperator::Or,
+                right: Box::new(Condition::Simple {
+                    field: String::from("lastname"),
+                    operator: Operator::Equal,
+                    value: String::from("Davies")
+                })
+            }
+        )
     }
-
-    #[test]
-    fn parens_respect_precedence_2() {
-        // birth = "SF" OR name = "Baker" AND name = "Yorgos"
-        // equals
-        // birth = "SF" OR (name = "Baker" AND name = "Yorgos")
-    }
-
-    #[test]
-    fn parens_respect_precedence_3() {
-        // NOT name = "Luca" AND age > 23
-        // equals
-        // (NOT name = "Luca") AND age > 23
-    }
-
-    #[test]
-    fn many_nested_parens_should_be_fine() {
-        // NOT ((( NOT ((( NOT name = "Luca" ))))))
-    }
-
-    #[test]
-    fn simple_parens() {
-        // (name = "Luca" OR padron = 107044) AND age > 23
-    }
-
-    #[test]
-    fn nested_parens() {
-        // NOT (name = "Luca" AND (age > 23 OR padron = 107044))
-    }
-
-    #[test]
-    fn missing_closing_paren() {
-        // (NOT name = "Luca" AND age > 23
-        // fails
-    }
-
-    #[test]
-    fn unexpected_token() {
-        // NOT AND name = "Luca"
-        // fails
-    }
-
-    #[test]
-    fn missing_side() {
-        // name = "Luca" OR
-        // fails
-    }
-
-    #[test]
-    fn yikes() {
-        // name = "Luca" AND NOT age > 23 OR (padron = 107044 AND NOT name = "Luca")
-    }
-
-    #[test]
-    fn simple_comparison_inside_parens() {
-        todo!()
-    }
-
-    #[test]
-    fn primary_unexpected_token() {
-        todo!()
-    }
-
-    #[test]
-    fn missing_parens() {
-        todo!()
-    }
-
-    #[test]
-    fn multiple_nested_parens() {
-        todo!()
-    } */
 }

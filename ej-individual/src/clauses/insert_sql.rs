@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 
-use crate::errors::{CustomError, SqlError};
+use crate::errors::SqlError;
 use crate::utils::find_file_in_folder;
 pub struct Into {
     table_name: String,
@@ -97,7 +97,7 @@ impl Insert {
 
     pub fn apply_to_table(&self, file: &mut File) -> Result<(), SqlError> {
         let line = self.values.join(",");
-        writeln!(file, "{}", line).map_err(|_| SqlError::Error(CustomError::WriteError))?;
+        writeln!(file, "{}", line).map_err(|_| SqlError::Error)?;
 
         Ok(())
     }

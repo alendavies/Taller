@@ -1,10 +1,5 @@
 use super::where_sql::Where;
-use crate::{
-    errors::{CustomError, SqlError},
-    register::Register,
-    table::Table,
-    utils::find_file_in_folder,
-};
+use crate::{errors::SqlError, register::Register, table::Table, utils::find_file_in_folder};
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -49,7 +44,7 @@ pub struct Update {
 }
 
 impl Update {
-    pub fn new_from_tokens(tokens: Vec<String>) -> Self {
+    pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
         if !tokens.contains(&String::from("UPDATE")) || !tokens.contains(&String::from("SET")) {
             println!("Clausula UPDATE inválida");
         }
@@ -82,14 +77,14 @@ impl Update {
             }
         }
 
-        let where_clause = Where::new_from_tokens(where_tokens);
+        let where_clause = Where::new_from_tokens(where_tokens)?;
         let set_clause = Set::new_from_tokens(set_tokens);
 
-        Self {
+        Ok(Self {
             table_name: table,
             where_clause,
             set_clause,
-        }
+        })
     }
 
     pub fn execute(&self, line: String, columns: &Vec<String>) -> Register {
@@ -124,7 +119,7 @@ impl Update {
         let mut result = Table::new();
 
         for (idx, line) in table.lines().enumerate() {
-            let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
+            let line = line.map_err(|_| SqlError::Error)?;
             if idx == 0 {
                 result.columns = line.split(',').map(|s| s.to_string()).collect();
                 continue;
@@ -140,14 +135,12 @@ impl Update {
 
     pub fn write_table(&self, csv: Vec<String>, folder_path: &str) -> Result<(), SqlError> {
         let temp_file_path = folder_path.to_string() + "/" + "temp.csv";
-        let mut temp_file =
-            File::create(&temp_file_path).map_err(|_| SqlError::Error(CustomError::FileError))?;
+        let mut temp_file = File::create(&temp_file_path).map_err(|_| SqlError::Error)?;
         for line in csv {
-            writeln!(temp_file, "{}", line)
-                .map_err(|_| SqlError::Error(CustomError::WriteError))?;
+            writeln!(temp_file, "{}", line).map_err(|_| SqlError::Error)?;
         }
         let path = folder_path.to_string() + "/" + &self.table_name + ".csv";
-        fs::rename(&temp_file_path, path).map_err(|_| SqlError::Error(CustomError::FileError))?;
+        fs::rename(&temp_file_path, path).map_err(|_| SqlError::Error)?;
 
         Ok(())
     }

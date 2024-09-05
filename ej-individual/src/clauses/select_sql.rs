@@ -4,12 +4,7 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-use crate::{
-    errors::{CustomError, SqlError},
-    register::Register,
-    table::Table,
-    utils::find_file_in_folder,
-};
+use crate::{errors::SqlError, register::Register, table::Table, utils::find_file_in_folder};
 
 use super::{orderby_sql::OrderBy, where_sql::Where};
 
@@ -21,7 +16,7 @@ pub struct Select {
 }
 
 impl Select {
-    pub fn new_from_tokens(tokens: Vec<String>) -> Self {
+    pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
         if !tokens.contains(&String::from("WHERE")) || !tokens.contains(&String::from("SELECT")) {
             println!("Clausula SELECT inválida");
         }
@@ -68,22 +63,22 @@ impl Select {
             }
         }
 
-        let where_clause = Where::new_from_tokens(where_tokens);
+        let where_clause = Where::new_from_tokens(where_tokens)?;
         let orderby_clause = OrderBy::new_from_tokens(orderby_tokens);
 
-        Self {
+        Ok(Self {
             table_name,
             columns: columns.iter().map(|c| c.to_string()).collect(),
             where_clause,
             orderby_clause,
-        }
+        })
     }
 
     pub fn apply_to_table(&self, table: BufReader<File>) -> Result<Table, SqlError> {
         let mut result = Table::new();
 
         for (idx, line) in table.lines().enumerate() {
-            let line = line.map_err(|_| SqlError::Error(CustomError::ReaderError))?;
+            let line = line.map_err(|_| SqlError::Error)?;
             if idx == 0 {
                 result.columns = line.split(',').map(|s| s.to_string()).collect();
                 continue;

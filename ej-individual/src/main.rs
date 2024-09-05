@@ -93,7 +93,7 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
 
     match tokens.first().ok_or(SqlError::InvalidSyntax)?.as_str() {
         "SELECT" => {
-            let clause = Select::new_from_tokens(tokens);
+            let clause = Select::new_from_tokens(tokens)?;
             let table = clause.open_table(folder_path)?;
 
             let result = clause.apply_to_table(table)?;
@@ -107,7 +107,7 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
             clause.apply_to_table(&mut file)?;
         }
         "DELETE" => {
-            let clause = Delete::new_from_tokens(tokens);
+            let clause = Delete::new_from_tokens(tokens)?;
             let table = clause.open_table(folder_path)?;
 
             let result = clause.apply_to_table(table)?;
@@ -117,7 +117,7 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
             clause.write_table(csv, folder_path)?;
         }
         "UPDATE" => {
-            let clause = Update::new_from_tokens(tokens);
+            let clause = Update::new_from_tokens(tokens)?;
             let table = clause.open_table(folder_path)?;
 
             let result = clause.apply_to_table(table)?;

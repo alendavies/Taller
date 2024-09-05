@@ -64,7 +64,7 @@ impl Delete {
                 result.columns = line.split(',').map(|s| s.to_string()).collect();
                 continue;
             }
-            let register = self.execute(line, &result.columns);
+            let register = self.execute(line, &result.columns)?;
 
             if !register.0.is_empty() {
                 result.registers.push(register);
@@ -102,7 +102,7 @@ impl Delete {
         Ok(reader)
     }
 
-    pub fn execute(&self, line: String, columns: &Vec<String>) -> Register {
+    pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
         let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
 
         let mut register = Register(HashMap::new());
@@ -115,19 +115,17 @@ impl Delete {
 
         let mut result = Register(HashMap::new());
 
-        if self.where_clause.column.len() > 0 {
-            let op_result = self.where_clause.execute(&register.0);
+        let op_result = self.where_clause.execute(&register.0)?;
 
-            if op_result == false {
-                for col in columns {
-                    result.0.insert(
-                        col.to_string(),
-                        register.0.get(col).unwrap_or(&String::new()).to_string(),
-                    );
-                }
+        if op_result == false {
+            for col in columns {
+                result.0.insert(
+                    col.to_string(),
+                    register.0.get(col).unwrap_or(&String::new()).to_string(),
+                );
             }
         }
 
-        result
+        Ok(result)
     }
 }

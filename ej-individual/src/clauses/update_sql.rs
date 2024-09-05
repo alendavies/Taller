@@ -98,17 +98,19 @@ impl Update {
                 .insert(col.to_string(), atributes[idx].to_string());
         }
 
-        if self.where_clause.column.len() > 0 {
-            let op_result = self.where_clause.execute(&register.0);
-
-            if op_result == true {
+        let op_result = self.where_clause.execute(&register.0);
+        match op_result {
+            Ok(result) => {
+                if result == true {
+                    for (col, val) in &self.set_clause.0 {
+                        register.0.insert(col.to_string(), val.to_string());
+                    }
+                }
+            }
+            Err(_) => {
                 for (col, val) in &self.set_clause.0 {
                     register.0.insert(col.to_string(), val.to_string());
                 }
-            }
-        } else {
-            for (col, val) in &self.set_clause.0 {
-                register.0.insert(col.to_string(), val.to_string());
             }
         }
 

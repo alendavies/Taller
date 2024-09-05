@@ -42,6 +42,7 @@ impl Select {
         i += 1;
 
         if tokens[i] == "WHERE" {
+            where_tokens.push(tokens[i].as_str());
             i += 1;
             if tokens.contains(&String::from("ORDER")) {
                 while tokens[i] != "ORDER" {
@@ -56,7 +57,10 @@ impl Select {
             }
         }
         if i < tokens.len() && tokens[i] == "ORDER" && tokens[i + 1] == "BY" {
-            i += 2;
+            orderby_tokens.push(tokens[i].as_str());
+            i += 1;
+            orderby_tokens.push(tokens[i].as_str());
+            i += 1;
             while i < tokens.len() {
                 orderby_tokens.push(tokens[i].as_str());
                 i += 1;
@@ -83,7 +87,7 @@ impl Select {
                 result.columns = line.split(',').map(|s| s.to_string()).collect();
                 continue;
             }
-            let register = self.execute(line, &result.columns);
+            let register = self.execute(line, &result.columns)?;
 
             if !register.0.is_empty() {
                 result.registers.push(register);
@@ -98,7 +102,7 @@ impl Select {
         Ok(result)
     }
 
-    pub fn execute(&self, line: String, columns: &Vec<String>) -> Register {
+    pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
         let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
 
         let mut register = Register(HashMap::new()).0;
@@ -121,16 +125,20 @@ impl Select {
         let mut result = Register(HashMap::new());
         let op_result = self.where_clause.execute(&register);
 
-        if op_result == true {
-            for col in col_selected {
-                result.0.insert(
-                    col.to_string(),
-                    register.get(&col).unwrap_or(&String::new()).to_string(),
-                );
+        match op_result {
+            Ok(value) => {
+                if value == true {
+                    for col in col_selected {
+                        result.0.insert(
+                            col.to_string(),
+                            register.get(&col).unwrap_or(&String::new()).to_string(),
+                        );
+                    }
+                }
+                return Ok(result);
             }
+            Err(_) => return Err(SqlError::Error),
         }
-
-        result
     }
 
     pub fn open_table(&self, folder_path: &str) -> Result<BufReader<File>, SqlError> {

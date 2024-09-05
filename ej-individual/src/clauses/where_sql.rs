@@ -13,8 +13,8 @@ impl Where {
         if !is_where(tokens[0]) {
             return Err(SqlError::Error);
         }
-        let pos = 1;
-        let (condition, _) = parse_condition(&tokens, pos)?;
+        let mut pos = 1;
+        let condition = parse_condition(&tokens, &mut pos)?;
         println!("{:?}", condition);
 
         Ok(Where { condition })

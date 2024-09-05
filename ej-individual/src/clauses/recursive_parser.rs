@@ -65,19 +65,16 @@ impl Condition {
         }
     }
 
-    pub fn new_simple_from_tokens(
-        tokens: &Vec<&str>,
-        pos: usize,
-    ) -> Result<(Self, usize), SqlError> {
-        if let Some(field) = tokens.get(pos) {
-            let pos = pos + 1; // Consume field
+    pub fn new_simple_from_tokens(tokens: &Vec<&str>, pos: &mut usize) -> Result<Self, SqlError> {
+        if let Some(field) = tokens.get(*pos) {
+            *pos += 1; // Consume field
 
-            if let Some(operator) = tokens.get(pos) {
-                let pos = pos + 1; // Consume operator
+            if let Some(operator) = tokens.get(*pos) {
+                *pos += 1; // Consume operator
 
-                if let Some(value) = tokens.get(pos) {
-                    let pos = pos + 1; // Consume value
-                    Ok((Condition::new_simple(field, operator, value)?, pos))
+                if let Some(value) = tokens.get(*pos) {
+                    *pos += 1; // Consume value
+                    Ok(Condition::new_simple(field, operator, value)?)
                 } else {
                     Err(SqlError::Error)
                 }
@@ -90,48 +87,44 @@ impl Condition {
     }
 }
 
-pub fn parse_condition(tokens: &Vec<&str>, pos: usize) -> Result<(Condition, usize), SqlError> {
-    let (mut left, mut pos) = parse_or(tokens, pos)?;
+pub fn parse_condition(tokens: &Vec<&str>, pos: &mut usize) -> Result<Condition, SqlError> {
+    let mut left = parse_or(tokens, pos)?;
 
-    while let Some(token) = tokens.get(pos) {
+    while let Some(token) = tokens.get(*pos) {
         if is_or(token) {
-            pos += 1; // Consume "OR"
-            let (right, new_pos) = parse_or(tokens, pos)?; // Parse right-hand side
+            *pos += 1; // Consume "OR"
+            let right = parse_or(tokens, pos)?; // Parse right-hand side
             left = Condition::new_complex(Some(left), LogicalOperator::Or, right);
-            pos = new_pos;
         } else {
             break;
         }
     }
 
-    Ok((left, pos))
+    Ok(left)
 }
 
-fn parse_or(tokens: &Vec<&str>, pos: usize) -> Result<(Condition, usize), SqlError> {
-    let (mut left, mut pos) = parse_and(tokens, pos)?;
+fn parse_or(tokens: &Vec<&str>, pos: &mut usize) -> Result<Condition, SqlError> {
+    let mut left = parse_and(tokens, pos)?;
 
-    while let Some(token) = tokens.get(pos) {
+    while let Some(token) = tokens.get(*pos) {
         if is_and(token) {
-            pos += 1; // Consume "AND"
-            let (right, new_pos) = parse_and(tokens, pos)?; // Parse right-hand side
+            *pos += 1; // Consume "AND"
+            let right = parse_and(tokens, pos)?; // Parse right-hand side
             left = Condition::new_complex(Some(left), LogicalOperator::And, right);
-            pos = new_pos;
         } else {
             break;
         }
     }
 
-    Ok((left, pos))
+    Ok(left)
 }
 
-fn parse_and(tokens: &Vec<&str>, pos: usize) -> Result<(Condition, usize), SqlError> {
-    if let Some(token) = tokens.get(pos) {
+fn parse_and(tokens: &Vec<&str>, pos: &mut usize) -> Result<Condition, SqlError> {
+    if let Some(token) = tokens.get(*pos) {
         if is_not(token) {
-            let (expr, new_pos) = parse_condition(tokens, pos + 1)?; // Consume "NOT" and parse next condition
-            Ok((
-                Condition::new_complex(None, LogicalOperator::Not, expr),
-                new_pos,
-            ))
+            *pos += 1;
+            let expr = parse_condition(tokens, pos)?; // Consume "NOT" and parse next condition
+            Ok(Condition::new_complex(None, LogicalOperator::Not, expr))
         } else {
             parse_base(tokens, pos)
         }
@@ -140,19 +133,21 @@ fn parse_and(tokens: &Vec<&str>, pos: usize) -> Result<(Condition, usize), SqlEr
     }
 }
 
-fn parse_base(tokens: &Vec<&str>, pos: usize) -> Result<(Condition, usize), SqlError> {
-    if let Some(token) = tokens.get(pos) {
+fn parse_base(tokens: &Vec<&str>, pos: &mut usize) -> Result<Condition, SqlError> {
+    if let Some(token) = tokens.get(*pos) {
         if is_left_paren(token) {
-            let (expr, new_pos) = parse_condition(tokens, pos + 1)?; // Parse the inner expression
-            let next_token = tokens.get(new_pos).ok_or(SqlError::Error)?;
+            *pos += 1;
+            let expr = parse_condition(tokens, pos)?; // Parse the inner expression
+            let next_token = tokens.get(*pos).ok_or(SqlError::Error)?;
             if is_right_paren(&next_token) {
-                Ok((expr, new_pos + 1)) // Consume ")" and return the parsed condition
+                *pos += 1;
+                Ok(expr) // Consume ")" and return the parsed condition
             } else {
                 Err(SqlError::Error)
             }
         } else {
-            let (simple_condition, pos) = Condition::new_simple_from_tokens(tokens, pos)?;
-            Ok((simple_condition, pos))
+            let simple_condition = Condition::new_simple_from_tokens(tokens, pos)?;
+            Ok(simple_condition)
         }
     } else {
         Err(SqlError::Error)
@@ -165,13 +160,15 @@ mod tests {
 
     #[test]
     fn simple_conditions() {
-        let pos = 0;
         let tokens1 = vec!["city", "=", "Gaiman"];
         let tokens2 = vec!["age", "<", "30"];
         let tokens3 = vec!["age", ">", "18"];
-        let (condition1, _) = parse_condition(&tokens1, pos).unwrap();
-        let (condition2, _) = parse_condition(&tokens2, pos).unwrap();
-        let (condition3, _) = parse_condition(&tokens3, pos).unwrap();
+        let mut pos = 0;
+        let condition1 = parse_condition(&tokens1, &mut pos).unwrap();
+        pos = 0;
+        let condition2 = parse_condition(&tokens2, &mut pos).unwrap();
+        pos = 0;
+        let condition3 = parse_condition(&tokens3, &mut pos).unwrap();
 
         assert_eq!(
             condition1,
@@ -202,8 +199,8 @@ mod tests {
     #[test]
     fn not() {
         let tokens = vec!["NOT", "city", "=", "Gaiman"];
-        let pos = 0;
-        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        let mut pos = 0;
+        let condition = parse_condition(&tokens, &mut pos).unwrap();
         assert_eq!(
             condition,
             Condition::Complex {
@@ -221,8 +218,8 @@ mod tests {
     #[test]
     fn one_or() {
         let tokens = vec!["city", "=", "Gaiman", "OR", "age", "<", "30"];
-        let pos = 0;
-        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        let mut pos = 0;
+        let condition = parse_condition(&tokens, &mut pos).unwrap();
         assert_eq!(
             condition,
             Condition::Complex {
@@ -246,8 +243,8 @@ mod tests {
         let tokens = vec![
             "city", "=", "Gaiman", "OR", "age", "<", "30", "OR", "lastname", "=", "Davies",
         ];
-        let pos = 0;
-        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        let mut pos = 0;
+        let condition = parse_condition(&tokens, &mut pos).unwrap();
         assert_eq!(
             condition,
             Condition::Complex {
@@ -277,8 +274,8 @@ mod tests {
     #[test]
     fn one_and() {
         let tokens = vec!["city", "=", "Gaiman", "AND", "age", "<", "30"];
-        let pos = 0;
-        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        let mut pos = 0;
+        let condition = parse_condition(&tokens, &mut pos).unwrap();
         assert_eq!(
             condition,
             Condition::Complex {
@@ -302,8 +299,8 @@ mod tests {
         let tokens = vec![
             "city", "=", "Gaiman", "AND", "age", "<", "30", "AND", "lastname", "=", "Davies",
         ];
-        let pos = 0;
-        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        let mut pos = 0;
+        let condition = parse_condition(&tokens, &mut pos).unwrap();
         assert_eq!(
             condition,
             Condition::Complex {
@@ -335,8 +332,8 @@ mod tests {
         let tokens = vec![
             "city", "=", "Gaiman", "AND", "age", ">", "18", "OR", "lastname", "=", "Davies",
         ];
-        let pos = 0;
-        let (condition, _) = parse_condition(&tokens, pos).unwrap();
+        let mut pos = 0;
+        let condition = parse_condition(&tokens, &mut pos).unwrap();
         assert_eq!(
             condition,
             Condition::Complex {

@@ -1,66 +1,53 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, panic::Location};
 
-use crate::utils::is_operator;
+use crate::{errors::SqlError, utils::is_where};
 
-pub enum Operator {
-    Equal,
-    Greater,
-    Less,
-}
+use super::recursive_parser::{parse_condition, Condition, LogicalOperator, Operator};
 
 pub struct Where {
-    pub column: String,
-    pub operator: Operator,
-    pub value: String,
+    pub condition: Condition,
 }
 
 impl Where {
-    pub fn new_from_tokens(tokens: Vec<&str>) -> Self {
-        let mut column = String::new();
-        let mut value = String::new();
-        let mut operator = Operator::Equal;
-
-        if tokens.len() < 1 {
-            return Self {
-                column,
-                value,
-                operator,
-            };
+    pub fn new_from_tokens(tokens: Vec<&str>) -> Result<Self, SqlError> {
+        if !is_where(tokens[0]) {
+            return Err(SqlError::Error);
         }
+        let pos = 1;
+        let (condition, _) = parse_condition(&tokens, pos)?;
+        println!("{:?}", condition);
 
-        let mut i = 0;
-
-        while i < tokens.len() {
-            let char = tokens[i].chars().nth(0).unwrap_or('0');
-            if is_operator(char) {
-                column = tokens[i - 1].to_string();
-                value = tokens[i + 1].to_string();
-                operator = match tokens[i] {
-                    "=" => Operator::Equal,
-                    ">" => Operator::Greater,
-                    "<" => Operator::Less,
-                    _ => panic!("Operador no soportado"),
-                }
-            }
-            i += 1;
-        }
-
-        Self {
-            column,
-            operator,
-            value,
-        }
+        Ok(Where { condition })
     }
 
-    pub fn execute(&self, register: &HashMap<String, String>) -> bool {
-        let default = String::new();
-        let x = register.get(&self.column).unwrap_or(&default);
-        let y = &self.value;
-
-        let op_result = match self.operator {
-            Operator::Less => *x < *y,
-            Operator::Greater => *x > *y,
-            Operator::Equal => *x == *y,
+    pub fn execute(&self, register: &HashMap<String, String>) -> Result<bool, SqlError> {
+        let op_result: Result<bool, SqlError> = match &self.condition {
+            Condition::Simple {
+                field,
+                operator,
+                value,
+            } => {
+                let y = value;
+                if let Some(x) = register.get(field) {
+                    return match operator {
+                        Operator::Lesser => Ok(x < y),
+                        Operator::Greater => Ok(x > y),
+                        Operator::Equal => Ok(x == y),
+                        Operator::Unknown => Err(SqlError::Error),
+                    };
+                } else {
+                    return Err(SqlError::Error);
+                }
+            }
+            Condition::Complex {
+                left,
+                operator,
+                right,
+            } => match operator {
+                LogicalOperator::Not => todo!(),
+                LogicalOperator::Or => todo!(),
+                LogicalOperator::And => todo!(),
+            },
         };
 
         op_result

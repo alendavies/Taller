@@ -14,6 +14,58 @@ pub fn find_file_in_folder(folder_path: &str, file_name: &str) -> bool {
     false
 }
 
-pub fn is_operator(c: char) -> bool {
-    matches!(c, '+' | '-' | '*' | '/' | '%' | '=' | '<' | '>')
+pub fn is_logical_operator(token: &str) -> bool {
+    token == "AND" || token == "OR" || token == "NOT"
+}
+
+pub fn is_comparison_operator(token: &str) -> bool {
+    token == ">" || token == "<" || token == "=="
+}
+
+pub fn is_number(token: &str) -> bool {
+    token.parse::<i32>().is_ok()
+}
+
+pub fn is_and(token: &str) -> bool {
+    token == "AND"
+}
+
+pub fn is_or(token: &str) -> bool {
+    token == "OR"
+}
+
+pub fn is_not(token: &str) -> bool {
+    token == "NOT"
+}
+
+pub fn is_left_paren(token: &str) -> bool {
+    token == "("
+}
+
+pub fn is_right_paren(token: &str) -> bool {
+    token == ")"
+}
+
+pub fn is_where(token: &str) -> bool {
+    token == "WHERE"
+}
+
+pub fn is_select(token: &str) -> bool {
+    token == "SELECT"
+}
+
+pub fn is_update(token: &str) -> bool {
+    token == "UPDATE"
+}
+
+pub fn is_insert(token: &str) -> bool {
+    token == "INSERT"
+}
+
+pub fn is_into(token: &str) -> bool {
+    token == "INTO"
+}
+
+pub fn is_from(token: &str) -> bool {
+    token == "FROM"
 }

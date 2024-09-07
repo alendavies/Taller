@@ -144,9 +144,9 @@ mod tests {
         assert_eq!(
             condition,
             Condition::Simple {
-                field: "age".to_string(),
+                field: String::from("age"),
                 operator: Operator::Greater,
-                value: "18".to_string()
+                value: String::from("18")
             }
         )
     }
@@ -160,9 +160,9 @@ mod tests {
         assert_eq!(
             condition,
             Condition::Simple {
-                field: "age".to_string(),
+                field: String::from("age"),
                 operator: Operator::Greater,
-                value: "18".to_string()
+                value: String::from("18")
             }
         )
     }
@@ -170,15 +170,15 @@ mod tests {
     #[test]
     fn create_complex_with_left() {
         let left = Condition::Simple {
-            field: "age".to_string(),
+            field: String::from("age"),
             operator: Operator::Greater,
-            value: "18".to_string(),
+            value: String::from("18"),
         };
 
         let right = Condition::Simple {
-            field: "city".to_string(),
+            field: String::from("city"),
             operator: Operator::Equal,
-            value: "Gaiman".to_string(),
+            value: String::from("Gaiman"),
         };
 
         let complex = Condition::new_complex(Some(left), LogicalOperator::And, right);
@@ -187,15 +187,15 @@ mod tests {
             complex,
             Condition::Complex {
                 left: Some(Box::new(Condition::Simple {
-                    field: "age".to_string(),
+                    field: String::from("age"),
                     operator: Operator::Greater,
-                    value: "18".to_string(),
+                    value: String::from("18"),
                 })),
                 operator: LogicalOperator::And,
                 right: Box::new(Condition::Simple {
-                    field: "city".to_string(),
+                    field: String::from("city"),
                     operator: Operator::Equal,
-                    value: "Gaiman".to_string(),
+                    value: String::from("Gaiman"),
                 })
             }
         )
@@ -204,9 +204,9 @@ mod tests {
     #[test]
     fn create_complex_without_left() {
         let right = Condition::Simple {
-            field: "name".to_string(),
+            field: String::from("name"),
             operator: Operator::Equal,
-            value: "Alen".to_string(),
+            value: String::from("Alen"),
         };
 
         let complex = Condition::new_complex(None, LogicalOperator::Not, right);
@@ -217,9 +217,9 @@ mod tests {
                 left: None,
                 operator: LogicalOperator::Not,
                 right: Box::new(Condition::Simple {
-                    field: "name".to_string(),
+                    field: String::from("name"),
                     operator: Operator::Equal,
-                    value: "Alen".to_string(),
+                    value: String::from("Alen"),
                 })
             }
         )
@@ -228,20 +228,20 @@ mod tests {
     #[test]
     fn execute_simple() {
         let mut register = HashMap::new();
-        register.insert("name".to_string(), "Alen".to_string());
-        register.insert("lastname".to_string(), "Davies".to_string());
-        register.insert("age".to_string(), "24".to_string());
+        register.insert(String::from("name"), String::from("Alen"));
+        register.insert(String::from("lastname"), String::from("Davies"));
+        register.insert(String::from("age"), String::from("24"));
 
         let condition_true = Condition::Simple {
-            field: "age".to_string(),
+            field: String::from("age"),
             operator: Operator::Greater,
-            value: "18".to_string(),
+            value: String::from("18"),
         };
 
         let condition_false = Condition::Simple {
-            field: "age".to_string(),
+            field: String::from("age"),
             operator: Operator::Greater,
-            value: "40".to_string(),
+            value: String::from("40"),
         };
 
         let result_true = condition_true.execute(&register).unwrap();
@@ -255,19 +255,19 @@ mod tests {
     #[test]
     fn execute_and() {
         let mut register = HashMap::new();
-        register.insert("name".to_string(), "Alen".to_string());
-        register.insert("lastname".to_string(), "Davies".to_string());
-        register.insert("age".to_string(), "24".to_string());
+        register.insert(String::from("name"), String::from("Alen"));
+        register.insert(String::from("lastname"), String::from("Davies"));
+        register.insert(String::from("age"), String::from("24"));
 
         let left = Condition::Simple {
-            field: "age".to_string(),
+            field: String::from("age"),
             operator: Operator::Greater,
-            value: "18".to_string(),
+            value: String::from("18"),
         };
         let right = Condition::Simple {
-            field: "name".to_string(),
+            field: String::from("name"),
             operator: Operator::Equal,
-            value: "Alen".to_string(),
+            value: String::from("Alen"),
         };
 
         let condition = Condition::Complex {
@@ -284,19 +284,19 @@ mod tests {
     #[test]
     fn execute_or() {
         let mut register = HashMap::new();
-        register.insert("name".to_string(), "Alen".to_string());
-        register.insert("lastname".to_string(), "Davies".to_string());
-        register.insert("age".to_string(), "24".to_string());
+        register.insert(String::from("name"), String::from("Alen"));
+        register.insert(String::from("lastname"), String::from("Davies"));
+        register.insert(String::from("age"), String::from("24"));
 
         let left = Condition::Simple {
-            field: "age".to_string(),
+            field: String::from("age"),
             operator: Operator::Greater,
-            value: "40".to_string(),
+            value: String::from("40"),
         };
         let right = Condition::Simple {
-            field: "name".to_string(),
+            field: String::from("name"),
             operator: Operator::Equal,
-            value: "Emily".to_string(),
+            value: String::from("Emily"),
         };
 
         let condition = Condition::Complex {
@@ -313,14 +313,14 @@ mod tests {
     #[test]
     fn execute_not() {
         let mut register = HashMap::new();
-        register.insert("name".to_string(), "Alen".to_string());
-        register.insert("lastname".to_string(), "Davies".to_string());
-        register.insert("age".to_string(), "24".to_string());
+        register.insert(String::from("name"), String::from("Alen"));
+        register.insert(String::from("lastname"), String::from("Davies"));
+        register.insert(String::from("age"), String::from("24"));
 
         let right = Condition::Simple {
-            field: "name".to_string(),
+            field: String::from("name"),
             operator: Operator::Equal,
-            value: "Emily".to_string(),
+            value: String::from("Emily"),
         };
 
         let condition = Condition::Complex {
@@ -337,20 +337,20 @@ mod tests {
     #[test]
     fn execute_and_or() {
         let mut register = HashMap::new();
-        register.insert("name".to_string(), "Alen".to_string());
-        register.insert("lastname".to_string(), "Davies".to_string());
-        register.insert("age".to_string(), "24".to_string());
-        register.insert("city".to_string(), "Gaiman".to_string());
+        register.insert(String::from("name"), String::from("Alen"));
+        register.insert(String::from("lastname"), String::from("Davies"));
+        register.insert(String::from("age"), String::from("24"));
+        register.insert(String::from("city"), String::from("Gaiman"));
 
         let left = Condition::Simple {
-            field: "age".to_string(),
+            field: String::from("age"),
             operator: Operator::Greater,
-            value: "40".to_string(),
+            value: String::from("40"),
         };
         let right1 = Condition::Simple {
-            field: "name".to_string(),
+            field: String::from("name"),
             operator: Operator::Equal,
-            value: "Alen".to_string(),
+            value: String::from("Alen"),
         };
 
         let or = Condition::Complex {
@@ -360,9 +360,9 @@ mod tests {
         };
 
         let right2 = Condition::Simple {
-            field: "city".to_string(),
+            field: String::from("city"),
             operator: Operator::Equal,
-            value: "Trelew".to_string(),
+            value: String::from("Trelew"),
         };
 
         let and = Condition::Complex {
@@ -379,15 +379,15 @@ mod tests {
     #[test]
     fn execute_not_and() {
         let mut register = HashMap::new();
-        register.insert("name".to_string(), "Alen".to_string());
-        register.insert("lastname".to_string(), "Davies".to_string());
-        register.insert("age".to_string(), "24".to_string());
-        register.insert("city".to_string(), "Gaiman".to_string());
+        register.insert(String::from("name"), String::from("Alen"));
+        register.insert(String::from("lastname"), String::from("Davies"));
+        register.insert(String::from("age"), String::from("24"));
+        register.insert(String::from("city"), String::from("Gaiman"));
 
         let right1 = Condition::Simple {
-            field: "age".to_string(),
+            field: String::from("age"),
             operator: Operator::Greater,
-            value: "40".to_string(),
+            value: String::from("40"),
         };
 
         let not = Condition::Complex {
@@ -397,9 +397,9 @@ mod tests {
         };
 
         let right2 = Condition::Simple {
-            field: "city".to_string(),
+            field: String::from("city"),
             operator: Operator::Equal,
-            value: "Gaiman".to_string(),
+            value: String::from("Gaiman"),
         };
 
         let and = Condition::Complex {
@@ -411,5 +411,84 @@ mod tests {
         let result = and.execute(&register).unwrap();
 
         assert_eq!(result, true)
+    }
+
+    #[test]
+    fn execute_not_and_or_with_paren() {
+        let mut register = HashMap::new();
+        register.insert(String::from("name"), String::from("Alen"));
+        register.insert(String::from("lastname"), String::from("Davies"));
+        register.insert(String::from("age"), String::from("24"));
+        register.insert(String::from("city"), String::from("Gaiman"));
+
+        // NOT (city = Gaiman AND (age > 18 OR lastname = Davies))
+
+        let condition = Condition::Complex {
+            left: None,
+            operator: LogicalOperator::Not,
+            right: Box::new(Condition::Complex {
+                left: Some(Box::new(Condition::Simple {
+                    field: String::from("city"),
+                    operator: Operator::Equal,
+                    value: String::from("Gaiman"),
+                })),
+                operator: LogicalOperator::And,
+                right: Box::new(Condition::Complex {
+                    left: Some(Box::new(Condition::Simple {
+                        field: String::from("age"),
+                        operator: Operator::Greater,
+                        value: String::from("18"),
+                    })),
+                    operator: LogicalOperator::Or,
+                    right: Box::new(Condition::Simple {
+                        field: String::from("lastname"),
+                        operator: Operator::Equal,
+                        value: String::from("Davies"),
+                    }),
+                }),
+            }),
+        };
+
+        let result = condition.execute(&register).unwrap();
+
+        assert_eq!(result, false)
+    }
+
+    #[test]
+
+    fn execute_and_or_with_paren2() {
+        let mut register = HashMap::new();
+        register.insert(String::from("name"), String::from("Alen"));
+        register.insert(String::from("lastname"), String::from("Davies"));
+        register.insert(String::from("age"), String::from("24"));
+        register.insert(String::from("city"), String::from("Gaiman"));
+
+        // city = Gaiman AND (age > 30 OR lastname = Davies)
+
+        let condition = Condition::Complex {
+            left: Some(Box::new(Condition::Simple {
+                field: String::from("city"),
+                operator: Operator::Equal,
+                value: String::from("Gaiman"),
+            })),
+            operator: LogicalOperator::And,
+            right: Box::new(Condition::Complex {
+                left: Some(Box::new(Condition::Simple {
+                    field: String::from("age"),
+                    operator: Operator::Greater,
+                    value: String::from("30"),
+                })),
+                operator: LogicalOperator::Or,
+                right: Box::new(Condition::Simple {
+                    field: String::from("lastname"),
+                    operator: Operator::Equal,
+                    value: String::from("Davies"),
+                }),
+            }),
+        };
+
+        let result = condition.execute(&register).unwrap();
+
+        assert_eq!(result, true);
     }
 }

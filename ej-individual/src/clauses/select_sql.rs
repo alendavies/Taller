@@ -1,80 +1,120 @@
+use super::{orderby_sql::OrderBy, where_sql::Where};
+use crate::{
+    errors::SqlError,
+    register::Register,
+    table::Table,
+    utils::{find_file_in_folder, is_from, is_orderby, is_select, is_where},
+};
 use std::{
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader},
 };
 
-use crate::{errors::SqlError, register::Register, table::Table, utils::find_file_in_folder};
-
-use super::{orderby_sql::OrderBy, where_sql::Where};
-
 pub struct Select {
     pub table_name: String,
     pub columns: Vec<String>,
-    pub where_clause: Where,
-    pub orderby_clause: OrderBy,
+    pub where_clause: Option<Where>,
+    pub orderby_clause: Option<OrderBy>,
+}
+
+fn parse_columns<'a>(tokens: &'a Vec<String>, i: &mut usize) -> Result<Vec<&'a String>, SqlError> {
+    let mut columns = Vec::new();
+    if is_select(&tokens[*i]) {
+        if *i < tokens.len() {
+            *i += 1;
+            while !is_from(&tokens[*i]) && *i < tokens.len() {
+                columns.push(&tokens[*i]);
+                *i += 1;
+            }
+        }
+    } else {
+        return Err(SqlError::InvalidSyntax);
+    }
+    Ok(columns)
+}
+
+fn parse_table_name(tokens: &Vec<String>, i: &mut usize) -> Result<String, SqlError> {
+    if *i < tokens.len() && is_from(&tokens[*i]) {
+        *i += 1;
+        let table_name = tokens[*i].to_string();
+        *i += 1;
+        Ok(table_name)
+    } else {
+        return Err(SqlError::InvalidSyntax);
+    }
+}
+
+fn parse_where_and_orderby<'a>(
+    tokens: &'a Vec<String>,
+    i: &mut usize,
+) -> Result<(Vec<&'a str>, Vec<&'a str>), SqlError> {
+    let mut where_tokens = Vec::new();
+    let mut orderby_tokens = Vec::new();
+
+    if *i < tokens.len() {
+        if is_where(&tokens[*i]) {
+            while !is_orderby(&tokens[*i], &tokens[*i + 1]) && *i < tokens.len() {
+                where_tokens.push(tokens[*i].as_str());
+                *i += 1;
+            }
+        }
+        if is_orderby(&tokens[*i], &tokens[*i + 1]) && *i < tokens.len() {
+            while *i < tokens.len() {
+                orderby_tokens.push(tokens[*i].as_str());
+                *i += 1;
+            }
+        }
+    }
+    Ok((where_tokens, orderby_tokens))
+}
+
+fn convert_line_to_register(line: String, columns: &Vec<String>) -> Register {
+    let attributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
+    let mut original = Register(HashMap::new());
+    for (idx, col) in columns.iter().enumerate() {
+        original
+            .0
+            .insert(col.to_string(), attributes[idx].to_string());
+    }
+
+    original
 }
 
 impl Select {
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
-        if !tokens.contains(&String::from("WHERE")) || !tokens.contains(&String::from("SELECT")) {
-            println!("Clausula SELECT inválida");
+        if tokens.len() < 4 {
+            return Err(SqlError::InvalidSyntax);
         }
-
-        let mut columns: Vec<&str> = Vec::new();
-        let mut where_tokens: Vec<&str> = Vec::new();
-        let mut orderby_tokens: Vec<&str> = Vec::new();
 
         let mut i = 0;
-        let mut table_name = String::new();
 
-        if tokens[i] == "SELECT" {
-            i += 1;
-            while tokens[i] != "FROM" {
-                columns.push(tokens[i].as_str());
-                i += 1;
-            }
-        }
-        if tokens[i] == "FROM" {
-            i += 1;
-            table_name = tokens[i].to_string();
-        }
-        i += 1;
+        let columns = parse_columns(&tokens, &mut i)?;
+        let table_name = parse_table_name(&tokens, &mut i)?;
 
-        if tokens[i] == "WHERE" {
-            where_tokens.push(tokens[i].as_str());
-            i += 1;
-            if tokens.contains(&String::from("ORDER")) {
-                while tokens[i] != "ORDER" {
-                    where_tokens.push(tokens[i].as_str());
-                    i += 1;
-                }
-            } else {
-                while i < tokens.len() {
-                    where_tokens.push(tokens[i].as_str());
-                    i += 1;
-                }
-            }
-        }
-        if i < tokens.len() && tokens[i] == "ORDER" && tokens[i + 1] == "BY" {
-            orderby_tokens.push(tokens[i].as_str());
-            i += 1;
-            orderby_tokens.push(tokens[i].as_str());
-            i += 1;
-            while i < tokens.len() {
-                orderby_tokens.push(tokens[i].as_str());
-                i += 1;
-            }
+        if columns.is_empty() || table_name.is_empty() {
+            return Err(SqlError::InvalidSyntax);
         }
 
-        let where_clause = Where::new_from_tokens(where_tokens)?;
-        let orderby_clause = OrderBy::new_from_tokens(orderby_tokens);
+        let (where_tokens, orderby_tokens) = parse_where_and_orderby(&tokens, &mut i)?;
+
+        let where_clause = if !where_tokens.is_empty() {
+            Some(Where::new_from_tokens(where_tokens)?)
+        } else {
+            None
+        };
+
+        let orderby_clause = if !orderby_tokens.is_empty() {
+            Some(OrderBy::new_from_tokens(orderby_tokens))
+        } else {
+            None
+        };
 
         Ok(Self {
             table_name,
             columns: columns.iter().map(|c| c.to_string()).collect(),
-            where_clause,
-            orderby_clause,
+            where_clause: where_clause,
+            orderby_clause: orderby_clause,
         })
     }
 
@@ -94,8 +134,8 @@ impl Select {
             }
         }
 
-        if self.orderby_clause.column != "" {
-            let registers_ordered = self.orderby_clause.execute(&mut result.registers);
+        if let Some(orderby) = &self.orderby_clause {
+            let registers_ordered = orderby.execute(&mut result.registers);
             result.registers = registers_ordered.to_vec();
         }
 
@@ -103,42 +143,43 @@ impl Select {
     }
 
     pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
-        let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
-
-        let mut register = Register(HashMap::new()).0;
-
-        for (idx, col) in columns.iter().enumerate() {
-            register.insert(col.to_string(), atributes[idx].to_string());
+        if !self.columns.iter().all(|col| columns.contains(col)) {
+            return Err(SqlError::InvalidColumn);
         }
 
-        let mut col_selected = Vec::new();
+        let mut cols_selected = Vec::new();
         if self.columns[0] == "*" {
             for col in columns {
-                col_selected.push(col.to_string());
+                cols_selected.push(col.to_string());
             }
         } else {
             for col in &self.columns {
-                col_selected.push(col.to_string());
+                cols_selected.push(col.to_string());
             }
         }
 
+        let original = convert_line_to_register(line, columns);
         let mut result = Register(HashMap::new());
-        let op_result = self.where_clause.execute(&register);
 
-        match op_result {
-            Ok(value) => {
-                if value == true {
-                    for col in col_selected {
-                        result.0.insert(
-                            col.to_string(),
-                            register.get(&col).unwrap_or(&String::new()).to_string(),
-                        );
-                    }
+        if let Some(where_clause) = &self.where_clause {
+            let op_result = where_clause.execute(&original)?;
+            if op_result == true {
+                for col in cols_selected {
+                    result.0.insert(
+                        col.to_string(),
+                        original.0.get(&col).unwrap_or(&String::new()).to_string(),
+                    );
                 }
-                return Ok(result);
             }
-            Err(_) => return Err(SqlError::Error),
+        } else {
+            for col in cols_selected {
+                result.0.insert(
+                    col.to_string(),
+                    original.0.get(&col).unwrap_or(&String::new()).to_string(),
+                );
+            }
         }
+        Ok(result)
     }
 
     pub fn open_table(&self, folder_path: &str) -> Result<BufReader<File>, SqlError> {

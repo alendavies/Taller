@@ -1,9 +1,9 @@
 use super::{orderby_sql::OrderBy, where_sql::Where};
 use crate::{
     errors::SqlError,
-    register::Register,
+    register::{self, Register},
     table::Table,
-    utils::{find_file_in_folder, is_from, is_orderby, is_select, is_where},
+    utils::{find_file_in_folder, is_by, is_from, is_order, is_select, is_where},
 };
 use std::{
     collections::HashMap,
@@ -11,6 +11,7 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+#[derive(Debug, PartialEq)]
 pub struct Select {
     pub table_name: String,
     pub columns: Vec<String>,
@@ -54,15 +55,19 @@ fn parse_where_and_orderby<'a>(
 
     if *i < tokens.len() {
         if is_where(&tokens[*i]) {
-            while !is_orderby(&tokens[*i], &tokens[*i + 1]) && *i < tokens.len() {
+            while *i < tokens.len() && !is_order(&tokens[*i]) {
                 where_tokens.push(tokens[*i].as_str());
                 *i += 1;
             }
         }
-        if is_orderby(&tokens[*i], &tokens[*i + 1]) && *i < tokens.len() {
-            while *i < tokens.len() {
-                orderby_tokens.push(tokens[*i].as_str());
-                *i += 1;
+        if *i < tokens.len() && is_order(&tokens[*i]) {
+            orderby_tokens.push(tokens[*i].as_str());
+            *i += 1;
+            if *i < tokens.len() && is_by(&tokens[*i]) {
+                while *i < tokens.len() {
+                    orderby_tokens.push(tokens[*i].as_str());
+                    *i += 1;
+                }
             }
         }
     }
@@ -105,7 +110,7 @@ impl Select {
         };
 
         let orderby_clause = if !orderby_tokens.is_empty() {
-            Some(OrderBy::new_from_tokens(orderby_tokens))
+            Some(OrderBy::new_from_tokens(orderby_tokens)?)
         } else {
             None
         };
@@ -116,6 +121,32 @@ impl Select {
             where_clause: where_clause,
             orderby_clause: orderby_clause,
         })
+    }
+
+    fn filter_columns(&self, columns: &Vec<String>, registers: Vec<Register>) -> Vec<Register> {
+        let mut cols_selected = Vec::new();
+        if self.columns[0] == "*" {
+            for col in columns {
+                cols_selected.push(col.to_string());
+            }
+        } else {
+            for col in &self.columns {
+                cols_selected.push(col.to_string());
+            }
+        }
+
+        let mut filtered_registers = Vec::new();
+        for register in registers {
+            let filtered: HashMap<String, String> = register
+                .0
+                .into_iter()
+                .filter(|(key, value)| cols_selected.contains(key))
+                .collect();
+
+            filtered_registers.push(Register(filtered));
+        }
+
+        filtered_registers
     }
 
     pub fn apply_to_table(&self, table: BufReader<File>) -> Result<Table, SqlError> {
@@ -134,10 +165,13 @@ impl Select {
             }
         }
 
+        let mut ordered_registers = Vec::new();
+
         if let Some(orderby) = &self.orderby_clause {
-            let registers_ordered = orderby.execute(&mut result.registers);
-            result.registers = registers_ordered.to_vec();
+            ordered_registers = orderby.execute(&mut result.registers).to_vec();
         }
+
+        result.registers = self.filter_columns(&result.columns, ordered_registers);
 
         Ok(result)
     }
@@ -147,35 +181,24 @@ impl Select {
             return Err(SqlError::InvalidColumn);
         }
 
-        let mut cols_selected = Vec::new();
-        if self.columns[0] == "*" {
-            for col in columns {
-                cols_selected.push(col.to_string());
-            }
-        } else {
-            for col in &self.columns {
-                cols_selected.push(col.to_string());
-            }
-        }
-
         let original = convert_line_to_register(line, columns);
         let mut result = Register(HashMap::new());
 
         if let Some(where_clause) = &self.where_clause {
             let op_result = where_clause.execute(&original)?;
             if op_result == true {
-                for col in cols_selected {
+                for col in columns {
                     result.0.insert(
                         col.to_string(),
-                        original.0.get(&col).unwrap_or(&String::new()).to_string(),
+                        original.0.get(col).unwrap_or(&String::new()).to_string(),
                     );
                 }
             }
         } else {
-            for col in cols_selected {
+            for col in columns {
                 result.0.insert(
                     col.to_string(),
-                    original.0.get(&col).unwrap_or(&String::new()).to_string(),
+                    original.0.get(col).unwrap_or(&String::new()).to_string(),
                 );
             }
         }
@@ -193,5 +216,149 @@ impl Select {
         let reader = BufReader::new(file);
 
         Ok(reader)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Select;
+    use crate::{
+        clauses::{
+            condition::{Condition, Operator},
+            orderby_sql::OrderBy,
+        },
+        errors::SqlError,
+    };
+
+    #[test]
+    fn new_1_tokens() {
+        let tokens = vec![String::from("SELECT")];
+        let select = Select::new_from_tokens(tokens);
+        assert_eq!(select, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_2_tokens() {
+        let tokens = vec![String::from("SELECT"), String::from("col")];
+        let select = Select::new_from_tokens(tokens);
+        assert_eq!(select, Err(SqlError::InvalidSyntax));
+    }
+    #[test]
+    fn new_3_tokens() {
+        let tokens = vec![
+            String::from("SELECT"),
+            String::from("col"),
+            String::from("FROM"),
+        ];
+        let select = Select::new_from_tokens(tokens);
+        assert_eq!(select, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_4_tokens() {
+        let tokens = vec![
+            String::from("SELECT"),
+            String::from("col"),
+            String::from("FROM"),
+            String::from("table"),
+        ];
+        let select = Select::new_from_tokens(tokens).unwrap();
+        assert_eq!(select.columns, ["col"]);
+        assert_eq!(select.table_name, "table");
+        assert_eq!(select.where_clause, None);
+        assert_eq!(select.orderby_clause, None);
+    }
+
+    #[test]
+    fn new_with_where() {
+        let tokens = vec![
+            String::from("SELECT"),
+            String::from("col"),
+            String::from("FROM"),
+            String::from("table"),
+            String::from("WHERE"),
+            String::from("cantidad"),
+            String::from(">"),
+            String::from("1"),
+        ];
+        let select = Select::new_from_tokens(tokens).unwrap();
+        assert_eq!(select.columns, ["col"]);
+        assert_eq!(select.table_name, "table");
+        let where_clause = select.where_clause.unwrap();
+        assert_eq!(
+            where_clause.condition,
+            Condition::Simple {
+                field: String::from("cantidad"),
+                operator: Operator::Greater,
+                value: String::from("1"),
+            }
+        );
+        assert_eq!(select.orderby_clause, None);
+    }
+
+    #[test]
+    fn new_with_orderby() {
+        let tokens = vec![
+            String::from("SELECT"),
+            String::from("col"),
+            String::from("FROM"),
+            String::from("table"),
+            String::from("WHERE"),
+            String::from("cantidad"),
+            String::from(">"),
+            String::from("1"),
+        ];
+        let select = Select::new_from_tokens(tokens).unwrap();
+        assert_eq!(select.columns, ["col"]);
+        assert_eq!(select.table_name, "table");
+        let where_clause = select.where_clause.unwrap();
+        assert_eq!(
+            where_clause.condition,
+            Condition::Simple {
+                field: String::from("cantidad"),
+                operator: Operator::Greater,
+                value: String::from("1"),
+            }
+        );
+        assert_eq!(select.orderby_clause, None);
+    }
+
+    #[test]
+    fn new_with_where_orderby() {
+        let tokens = vec![
+            String::from("SELECT"),
+            String::from("col"),
+            String::from("FROM"),
+            String::from("table"),
+            String::from("WHERE"),
+            String::from("cantidad"),
+            String::from(">"),
+            String::from("1"),
+            String::from("ORDER"),
+            String::from("BY"),
+            String::from("email"),
+        ];
+        let select = Select::new_from_tokens(tokens).unwrap();
+        assert_eq!(select.columns, ["col"]);
+        assert_eq!(select.table_name, "table");
+        let where_clause = select.where_clause.unwrap();
+        assert_eq!(
+            where_clause.condition,
+            Condition::Simple {
+                field: String::from("cantidad"),
+                operator: Operator::Greater,
+                value: String::from("1"),
+            }
+        );
+        let orderby_clause = select.orderby_clause.unwrap();
+        let mut columns = Vec::new();
+        columns.push(String::from("email"));
+        assert_eq!(
+            orderby_clause,
+            OrderBy {
+                columns,
+                order: String::new()
+            }
+        );
     }
 }

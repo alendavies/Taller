@@ -1,43 +1,66 @@
-use crate::register::Register;
+use std::cmp::Ordering;
 
+use crate::{
+    errors::SqlError,
+    register::Register,
+    utils::{is_by, is_order},
+};
+
+#[derive(Debug, PartialEq)]
 pub struct OrderBy {
-    pub column: String,
+    pub columns: Vec<String>,
     pub order: String,
 }
 
 impl OrderBy {
-    pub fn new_from_tokens(tokens: Vec<&str>) -> Self {
-        let mut column = String::new();
-        let mut order = String::new();
-
-        if tokens.len() < 1 {
-            return Self { column, order };
+    pub fn new_from_tokens(tokens: Vec<&str>) -> Result<Self, SqlError> {
+        if tokens.len() < 3 {
+            return Err(SqlError::InvalidSyntax);
         }
 
-        for token in tokens {
-            if token.chars().all(|c| c.is_alphabetic()) {
-                if token.chars().all(|c| c.is_lowercase()) {
-                    column = token.to_string();
-                } else if token.chars().all(|c| c.is_uppercase()) {
-                    order = token.to_string();
-                }
+        let mut columns = Vec::new();
+        let mut order = String::new();
+        let mut i = 0;
+
+        if !is_order(tokens[i]) && !is_by(tokens[i + 1]) {
+            return Err(SqlError::InvalidSyntax);
+        }
+
+        i += 2;
+
+        while i < tokens.len() && tokens[i] != "DESC" && tokens[i] != "ASC" {
+            columns.push(tokens[i].to_string());
+            i += 1;
+        }
+
+        if i < tokens.len() {
+            if tokens[i] == "DESC" || tokens[i] == "ASC" {
+                order = tokens[i].to_string();
             }
         }
-        Self { column, order }
+
+        Ok(Self { columns, order })
     }
 
     pub fn execute<'a>(&self, registers: &'a mut Vec<Register>) -> &'a Vec<Register> {
         registers.sort_by(|a, b| {
-            let default = String::new();
-            let val_a = a.0.get(&self.column).unwrap_or(&default);
-            let val_b = b.0.get(&self.column).unwrap_or(&default);
-            if self.order == "DESC" {
-                val_b.cmp(val_a)
-            } else {
-                val_a.cmp(val_b)
+            let mut result = Ordering::Equal;
+            for column in &self.columns {
+                if let Some(val_a) = a.0.get(column) {
+                    if let Some(val_b) = b.0.get(column) {
+                        result = if self.order == "DESC" {
+                            val_b.cmp(val_a)
+                        } else {
+                            val_a.cmp(val_b)
+                        };
+                        if result != Ordering::Equal {
+                            break;
+                        }
+                    }
+                }
             }
+            result
         });
-
         registers
     }
 }

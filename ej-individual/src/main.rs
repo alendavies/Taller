@@ -6,8 +6,7 @@ mod utils;
 
 use std::env;
 
-use clauses::update_sql::Update;
-use clauses::{delete_sql::Delete, insert_sql::Insert, select_sql::Select};
+use clauses::{delete_sql::Delete, insert_sql::Insert, select_sql::Select, update_sql::Update};
 use errors::SqlError;
 use table::Table;
 

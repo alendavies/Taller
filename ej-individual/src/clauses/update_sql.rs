@@ -1,4 +1,4 @@
-use super::set::Set;
+use super::set_sql::Set;
 use super::where_sql::Where;
 use crate::utils::{is_set, is_update, is_where};
 use crate::{errors::SqlError, register::Register, table::Table, utils::find_file_in_folder};
@@ -151,7 +151,7 @@ mod tests {
     use crate::{
         clauses::{
             condition::{Condition, Operator},
-            set::Set,
+            set_sql::Set,
             update_sql::Update,
             where_sql::Where,
         },

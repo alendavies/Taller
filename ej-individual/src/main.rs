@@ -104,7 +104,7 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
             }
         }
         "INSERT" => {
-            let clause = Insert::new_from_tokens(tokens);
+            let mut clause = Insert::new_from_tokens(tokens)?;
             let mut file = clause.open_table(folder_path)?;
 
             clause.apply_to_table(&mut file)?;
@@ -130,7 +130,6 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
             clause.write_table(csv, folder_path)?;
         }
         _ => {
-            println!("Error al parsear query");
             return Err(SqlError::InvalidSyntax);
         }
     }

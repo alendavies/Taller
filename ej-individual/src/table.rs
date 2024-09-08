@@ -1,5 +1,6 @@
 use crate::register::Register;
 
+#[derive(Debug)]
 pub struct Table {
     pub columns: Vec<String>,
     pub registers: Vec<Register>,

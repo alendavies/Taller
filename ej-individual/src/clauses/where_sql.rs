@@ -1,6 +1,7 @@
 use super::{condition::Condition, recursive_parser::parse_condition};
 use crate::{errors::SqlError, register::Register};
 
+#[derive(Debug, PartialEq)]
 pub struct Where {
     pub condition: Condition,
 }

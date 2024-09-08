@@ -1,8 +1,7 @@
+use crate::errors::SqlError;
 use std::collections::HashMap;
 
-use crate::errors::SqlError;
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Register(pub HashMap<String, String>);
 
 impl Register {

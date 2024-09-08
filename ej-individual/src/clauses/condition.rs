@@ -1,4 +1,4 @@
-use crate::errors::SqlError;
+use crate::{errors::SqlError, utils::is_number};
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
@@ -89,6 +89,9 @@ impl Condition {
             } => {
                 let y = value;
                 if let Some(x) = register.get(field) {
+                    if is_number(y) && !is_number(x) || !is_number(y) && is_number(x) {
+                        return Err(SqlError::InvalidSyntax);
+                    }
                     match operator {
                         Operator::Lesser => Ok(x < y),
                         Operator::Greater => Ok(x > y),

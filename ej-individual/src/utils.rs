@@ -68,3 +68,7 @@ pub fn is_order(token1: &str) -> bool {
 pub fn is_by(token1: &str) -> bool {
     token1 == "BY"
 }
+
+pub fn is_delete(token: &str) -> bool {
+    token == "DELETE"
+}

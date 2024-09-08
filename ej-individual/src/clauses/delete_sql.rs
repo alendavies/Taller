@@ -29,7 +29,9 @@ impl Delete {
                 return Err(SqlError::InvalidSyntax);
             }
             if i == 1 && is_from(&tokens[i]) {
-                table_name = tokens[i + 1].to_string();
+                if i + 1 < tokens.len() {
+                    table_name = tokens[i + 1].to_string();
+                }
             }
 
             if i == 3 && is_where(&tokens[i]) {
@@ -40,6 +42,11 @@ impl Delete {
             }
             i += 1;
         }
+
+        if table_name.is_empty() {
+            return Err(SqlError::InvalidSyntax);
+        }
+
         let mut where_clause = None;
 
         if !where_tokens.is_empty() {
@@ -74,6 +81,34 @@ impl Delete {
         Ok(result)
     }
 
+    pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
+        let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
+
+        let mut register = Register(HashMap::new());
+
+        for (idx, col) in columns.iter().enumerate() {
+            register
+                .0
+                .insert(col.to_string(), atributes[idx].to_string());
+        }
+
+        let mut result = Register(HashMap::new());
+
+        if let Some(where_clause) = &self.where_clause {
+            let op_result = where_clause.execute(&register)?;
+
+            if op_result == false {
+                for col in columns {
+                    result.0.insert(
+                        col.to_string(),
+                        register.0.get(col).unwrap_or(&String::new()).to_string(),
+                    );
+                }
+            }
+        }
+        Ok(result)
+    }
+
     pub fn write_table(&self, csv: Vec<String>, folder_path: &str) -> Result<(), SqlError> {
         let temp_file_path = folder_path.to_string() + "/" + "temp.csv";
         let mut temp_file = File::create(&temp_file_path).map_err(|_| SqlError::Error)?;
@@ -101,34 +136,6 @@ impl Delete {
         let reader = BufReader::new(file);
 
         Ok(reader)
-    }
-
-    pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
-        let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
-
-        let mut register = Register(HashMap::new());
-
-        for (idx, col) in columns.iter().enumerate() {
-            register
-                .0
-                .insert(col.to_string(), atributes[idx].to_string());
-        }
-
-        let mut result = Register(HashMap::new());
-
-        if let Some(where_clause) = &self.where_clause {
-            let op_result = where_clause.execute(&register)?;
-
-            if op_result == false {
-                for col in columns {
-                    result.0.insert(
-                        col.to_string(),
-                        register.0.get(col).unwrap_or(&String::new()).to_string(),
-                    );
-                }
-            }
-        }
-        Ok(result)
     }
 }
 

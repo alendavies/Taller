@@ -4,11 +4,10 @@ mod register;
 mod table;
 mod utils;
 
-use std::env;
-
 use clauses::{delete_sql::Delete, insert_sql::Insert, select_sql::Select, update_sql::Update};
 use errors::SqlError;
-use table::Table;
+use std::env;
+use utils::table_to_csv;
 
 fn tokens_from_query(string: &str) -> Vec<String> {
     let mut index = 0;
@@ -133,19 +132,6 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
         }
     }
     Ok(result_csv)
-}
-
-fn table_to_csv(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, SqlError> {
-    let mut result: Vec<String> = Vec::new();
-
-    result.push(column_order.join(","));
-
-    for register in &table.registers {
-        let register_csv = register.to_csv(&column_order)?;
-        result.push(register_csv);
-    }
-
-    Ok(result)
 }
 
 fn main() -> Result<(), SqlError> {

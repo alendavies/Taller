@@ -1,5 +1,7 @@
 use std::{fs, path::Path};
 
+use crate::{errors::SqlError, table::Table};
+
 pub fn find_file_in_folder(folder_path: &str, file_name: &str) -> bool {
     let path = Path::new(folder_path);
     if let Ok(entries) = fs::read_dir(path) {
@@ -12,6 +14,19 @@ pub fn find_file_in_folder(folder_path: &str, file_name: &str) -> bool {
         }
     }
     false
+}
+
+pub fn table_to_csv(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>, SqlError> {
+    let mut result: Vec<String> = Vec::new();
+
+    result.push(column_order.join(","));
+
+    for register in &table.registers {
+        let register_csv = register.to_csv(&column_order)?;
+        result.push(register_csv);
+    }
+
+    Ok(result)
 }
 
 pub fn is_number(token: &str) -> bool {

@@ -4,6 +4,7 @@ use crate::utils::{find_file_in_folder, is_insert, is_values};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 
+#[derive(Debug, PartialEq)]
 pub struct Insert {
     pub values: Vec<String>,
     pub into_clause: Into,
@@ -69,9 +70,6 @@ impl Insert {
 
         self.reorder_values(columns);
 
-        println!("{:?}", self.into_clause.columns);
-        println!("{:?}", self.values);
-
         let line = self.values.join(",");
 
         file.seek(SeekFrom::End(0)).map_err(|_| SqlError::Error)?;
@@ -116,5 +114,193 @@ impl Insert {
             .map_err(|_| SqlError::InvalidTable)?;
 
         Ok(file)
+    }
+}
+
+#[cfg(test)]
+
+mod test {
+    use std::io::BufRead;
+
+    use crate::errors::SqlError;
+
+    #[test]
+    fn new_1_token() {
+        let tokens = vec![String::from("INSERT")];
+        let result = super::Insert::new_from_tokens(tokens);
+        assert_eq!(result, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_3_tokens() {
+        let tokens = vec![
+            String::from("INSERT"),
+            String::from("INTO"),
+            String::from("table"),
+        ];
+
+        let result = super::Insert::new_from_tokens(tokens);
+        assert_eq!(result, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_6_tokens() {
+        let tokens = vec![
+            String::from("INSERT"),
+            String::from("INTO"),
+            String::from("table"),
+            String::from("name"),
+            String::from("VALUES"),
+            String::from("Alen"),
+        ];
+        let result = super::Insert::new_from_tokens(tokens).unwrap();
+        assert_eq!(
+            result,
+            super::Insert {
+                values: vec![String::from("Alen")],
+                into_clause: super::Into {
+                    table_name: String::from("table"),
+                    columns: vec![String::from("name")]
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn new_more_values() {
+        let tokens = vec![
+            String::from("INSERT"),
+            String::from("INTO"),
+            String::from("table"),
+            String::from("name, age"),
+            String::from("VALUES"),
+            String::from("Alen, 25"),
+        ];
+        let result = super::Insert::new_from_tokens(tokens).unwrap();
+        assert_eq!(
+            result,
+            super::Insert {
+                values: vec![String::from("Alen"), String::from("25")],
+                into_clause: super::Into {
+                    table_name: String::from("table"),
+                    columns: vec![String::from("name"), String::from("age")]
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn insert_with_missing_values() {
+        let mut insert = super::Insert {
+            values: vec![String::from("Alen")],
+            into_clause: super::Into {
+                table_name: String::from("testing"),
+                columns: vec![String::from("nombre")],
+            },
+        };
+
+        let mut file = insert.open_table("tablas").unwrap();
+
+        assert_eq!(insert.apply_to_table(&mut file), Ok(()));
+
+        let expected = vec![
+            "nombre,apellido,edad",
+            "Juan,Pérez,30",
+            "Ana,López,18",
+            "Carlos,Gómez,40",
+            "Alen,,",
+        ];
+
+        let file = std::fs::File::open("tablas/testing.csv").unwrap();
+        let reader = std::io::BufReader::new(file);
+        let mut result = Vec::new();
+
+        for line in reader.lines() {
+            result.push(line.unwrap());
+        }
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn insert_all_values() {
+        let mut insert = super::Insert {
+            values: vec![
+                String::from("Alen"),
+                String::from("Davies"),
+                String::from("25"),
+            ],
+            into_clause: super::Into {
+                table_name: String::from("testing"),
+                columns: vec![
+                    String::from("nombre"),
+                    String::from("apellido"),
+                    String::from("edad"),
+                ],
+            },
+        };
+
+        let mut file = insert.open_table("tablas").unwrap();
+
+        assert_eq!(insert.apply_to_table(&mut file), Ok(()));
+
+        let expected = vec![
+            "nombre,apellido,edad",
+            "Juan,Pérez,30",
+            "Ana,López,18",
+            "Carlos,Gómez,40",
+            "Alen,Davies,25",
+        ];
+
+        let file = std::fs::File::open("tablas/testing.csv").unwrap();
+        let reader = std::io::BufReader::new(file);
+        let mut result = Vec::new();
+
+        for line in reader.lines() {
+            result.push(line.unwrap());
+        }
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn insert_in_desorder() {
+        let mut insert = super::Insert {
+            values: vec![
+                String::from("Davies"),
+                String::from("25"),
+                String::from("Alen"),
+            ],
+            into_clause: super::Into {
+                table_name: String::from("testing"),
+                columns: vec![
+                    String::from("apellido"),
+                    String::from("edad"),
+                    String::from("nombre"),
+                ],
+            },
+        };
+
+        let mut file = insert.open_table("tablas").unwrap();
+
+        assert_eq!(insert.apply_to_table(&mut file), Ok(()));
+
+        let expected = vec![
+            "nombre,apellido,edad",
+            "Juan,Pérez,30",
+            "Ana,López,18",
+            "Carlos,Gómez,40",
+            "Alen,Davies,25",
+        ];
+
+        let file = std::fs::File::open("tablas/testing.csv").unwrap();
+        let reader = std::io::BufReader::new(file);
+        let mut result = Vec::new();
+
+        for line in reader.lines() {
+            result.push(line.unwrap());
+        }
+
+        assert_eq!(result, expected);
     }
 }

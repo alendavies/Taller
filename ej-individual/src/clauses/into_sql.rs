@@ -1,5 +1,6 @@
 use crate::{errors::SqlError, utils::is_into};
 
+#[derive(Debug, PartialEq)]
 pub struct Into {
     pub table_name: String,
     pub columns: Vec<String>,

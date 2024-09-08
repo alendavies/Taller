@@ -120,9 +120,8 @@ impl Insert {
 #[cfg(test)]
 
 mod test {
-    use std::io::BufRead;
-
     use crate::errors::SqlError;
+    use std::io::BufRead;
 
     #[test]
     fn new_1_token() {

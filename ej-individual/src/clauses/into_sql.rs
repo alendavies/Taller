@@ -12,7 +12,7 @@ impl Into {
             return Err(SqlError::InvalidSyntax);
         }
         let mut i = 0;
-        let mut table_name = String::new();
+        let table_name;
         let mut columns: Vec<String> = Vec::new();
 
         if is_into(&tokens[i]) {

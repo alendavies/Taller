@@ -230,7 +230,7 @@ mod test {
                 String::from("25"),
             ],
             into_clause: super::Into {
-                table_name: String::from("testing"),
+                table_name: String::from("testing_all"),
                 columns: vec![
                     String::from("nombre"),
                     String::from("apellido"),
@@ -251,7 +251,7 @@ mod test {
             "Alen,Davies,25",
         ];
 
-        let file = std::fs::File::open("tablas/testing.csv").unwrap();
+        let file = std::fs::File::open("tablas/testing_all.csv").unwrap();
         let reader = std::io::BufReader::new(file);
         let mut result = Vec::new();
 
@@ -271,7 +271,7 @@ mod test {
                 String::from("Alen"),
             ],
             into_clause: super::Into {
-                table_name: String::from("testing"),
+                table_name: String::from("testing_desorder"),
                 columns: vec![
                     String::from("apellido"),
                     String::from("edad"),
@@ -292,7 +292,7 @@ mod test {
             "Alen,Davies,25",
         ];
 
-        let file = std::fs::File::open("tablas/testing.csv").unwrap();
+        let file = std::fs::File::open("tablas/testing_desorder.csv").unwrap();
         let reader = std::io::BufReader::new(file);
         let mut result = Vec::new();
 

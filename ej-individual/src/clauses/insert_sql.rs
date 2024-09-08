@@ -193,7 +193,7 @@ mod test {
         let mut insert = super::Insert {
             values: vec![String::from("Alen")],
             into_clause: super::Into {
-                table_name: String::from("testing"),
+                table_name: String::from("testing_values"),
                 columns: vec![String::from("nombre")],
             },
         };
@@ -210,7 +210,7 @@ mod test {
             "Alen,,",
         ];
 
-        let file = std::fs::File::open("tablas/testing.csv").unwrap();
+        let file = std::fs::File::open("tablas/testing_values.csv").unwrap();
         let reader = std::io::BufReader::new(file);
         let mut result = Vec::new();
 

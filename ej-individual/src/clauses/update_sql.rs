@@ -251,17 +251,17 @@ mod tests {
             ],
             registers: vec![
                 Register(HashMap::from([
-                    (String::from("nombre"), String::from("Juan")),
+                    (String::from("nombre"), String::from("Alen")),
                     (String::from("apellido"), String::from("Pérez")),
                     (String::from("edad"), String::from("30")),
                 ])),
                 Register(HashMap::from([
-                    (String::from("nombre"), String::from("Ana")),
+                    (String::from("nombre"), String::from("Alen")),
                     (String::from("apellido"), String::from("López")),
                     (String::from("edad"), String::from("18")),
                 ])),
                 Register(HashMap::from([
-                    (String::from("nombre"), String::from("Carlos")),
+                    (String::from("nombre"), String::from("Alen")),
                     (String::from("apellido"), String::from("Gómez")),
                     (String::from("edad"), String::from("40")),
                 ])),

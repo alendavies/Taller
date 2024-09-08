@@ -1,120 +1,75 @@
+use super::set::Set;
 use super::where_sql::Where;
+use crate::utils::{is_set, is_update, is_where};
 use crate::{errors::SqlError, register::Register, table::Table, utils::find_file_in_folder};
+use std::io::Write;
 use std::{
     collections::HashMap,
     fs::{self, File},
     io::{BufRead, BufReader},
 };
 
-use std::io::Write;
-
-pub struct Set(Vec<(String, String)>);
-
-impl Set {
-    fn new_from_tokens(tokens: Vec<String>) -> Self {
-        let mut set = Vec::new();
-
-        if tokens.len() < 1 {
-            return Self(set);
-        }
-
-        let mut i = 0;
-
-        if tokens[i] != "SET" || !tokens.contains(&"=".to_string()) {
-            println!("Error en clausula SET");
-        }
-
-        i += 1;
-
-        while i < tokens.len() {
-            if tokens[i] == "=" {
-                set.push((tokens[i - 1].to_string(), tokens[i + 1].to_string()));
-            }
-            i += 1;
-        }
-
-        Self(set)
-    }
-}
-
+#[derive(PartialEq, Debug)]
 pub struct Update {
     pub table_name: String,
-    pub where_clause: Where,
     pub set_clause: Set,
+    pub where_clause: Option<Where>,
 }
 
 impl Update {
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
-        if !tokens.contains(&String::from("UPDATE")) || !tokens.contains(&String::from("SET")) {
-            println!("Clausula UPDATE inválida");
+        if tokens.len() < 4 {
+            return Err(SqlError::InvalidSyntax);
         }
-
-        let mut where_tokens: Vec<&str> = Vec::new();
+        let mut where_tokens = Vec::new();
         let mut set_tokens = Vec::new();
+        let mut table_name = String::new();
 
         let mut i = 0;
 
-        if tokens[i] != "UPDATE" {
-            println!("Clausula UPDATE inválida");
-        }
-        i += 1;
-        let table = tokens[i].to_string();
-
-        i += 1;
-        if tokens[i] != "SET" {
-            println!("Clausula UPDATE inválida");
-        }
-
-        while tokens[i] != "WHERE" && i < tokens.len() {
-            set_tokens.push(tokens[i].to_string());
-            i += 1;
-        }
-
-        if i < tokens.len() && tokens[i] == "WHERE" {
-            while i < tokens.len() {
-                where_tokens.push(tokens[i].as_str());
-                i += 1;
+        while i < tokens.len() {
+            if i == 0 && !is_update(&tokens[i]) || i == 2 && !is_set(&tokens[i]) {
+                return Err(SqlError::InvalidSyntax);
             }
-        }
 
-        let where_clause = Where::new_from_tokens(where_tokens)?;
-        let set_clause = Set::new_from_tokens(set_tokens);
+            if i == 0 && is_update(&tokens[i]) {
+                if i + 1 < tokens.len() {
+                    table_name = tokens[i + 1].to_string();
+                }
+            }
 
-        Ok(Self {
-            table_name: table,
-            where_clause,
-            set_clause,
-        })
-    }
-
-    pub fn execute(&self, line: String, columns: &Vec<String>) -> Register {
-        let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
-
-        let mut register = Register(HashMap::new());
-
-        for (idx, col) in columns.iter().enumerate() {
-            register
-                .0
-                .insert(col.to_string(), atributes[idx].to_string());
-        }
-
-        let op_result = self.where_clause.execute(&register);
-        match op_result {
-            Ok(result) => {
-                if result == true {
-                    for (col, val) in &self.set_clause.0 {
-                        register.0.insert(col.to_string(), val.to_string());
+            if i == 2 && is_set(&tokens[i]) {
+                while i < tokens.len() && !is_where(&tokens[i]) {
+                    set_tokens.push(tokens[i].as_str());
+                    i += 1;
+                }
+                if i < tokens.len() && is_where(&tokens[i]) {
+                    while i < tokens.len() {
+                        where_tokens.push(tokens[i].as_str());
+                        i += 1;
                     }
                 }
             }
-            Err(_) => {
-                for (col, val) in &self.set_clause.0 {
-                    register.0.insert(col.to_string(), val.to_string());
-                }
-            }
+            i += 1;
         }
 
-        register
+        if table_name.is_empty() || set_tokens.is_empty() {
+            return Err(SqlError::InvalidSyntax);
+        }
+
+        let mut where_clause = None;
+
+        if !where_tokens.is_empty() {
+            where_clause = Some(Where::new_from_tokens(where_tokens)?);
+        }
+
+        let set_clause = Set::new_from_tokens(set_tokens)?;
+
+        Ok(Self {
+            table_name,
+            where_clause,
+            set_clause,
+        })
     }
 
     pub fn apply_to_table(&self, table: BufReader<File>) -> Result<Table, SqlError> {
@@ -126,13 +81,41 @@ impl Update {
                 result.columns = line.split(',').map(|s| s.to_string()).collect();
                 continue;
             }
-            let register = self.execute(line, &result.columns);
+            let register = self.execute(line, &result.columns)?;
 
             if !register.0.is_empty() {
                 result.registers.push(register);
             }
         }
         Ok(result)
+    }
+
+    pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
+        let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
+
+        let mut register = Register(HashMap::new());
+
+        for (idx, col) in columns.iter().enumerate() {
+            register
+                .0
+                .insert(col.to_string(), atributes[idx].to_string());
+        }
+
+        if let Some(where_clause) = &self.where_clause {
+            let op_result = where_clause.execute(&register)?;
+
+            if op_result == true {
+                for (col, val) in &self.set_clause.0 {
+                    register.0.insert(col.to_string(), val.to_string());
+                }
+            }
+        } else {
+            for (col, val) in &self.set_clause.0 {
+                register.0.insert(col.to_string(), val.to_string());
+            }
+        }
+
+        Ok(register)
     }
 
     pub fn write_table(&self, csv: Vec<String>, folder_path: &str) -> Result<(), SqlError> {
@@ -158,5 +141,180 @@ impl Update {
         let reader = BufReader::new(file);
 
         Ok(reader)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::{
+        clauses::{
+            condition::{Condition, Operator},
+            set::Set,
+            update_sql::Update,
+            where_sql::Where,
+        },
+        errors::SqlError,
+        register::Register,
+        table::Table,
+    };
+
+    #[test]
+    fn new_1_token() {
+        let tokens = vec![String::from("UPDATE")];
+        let update = Update::new_from_tokens(tokens);
+        assert_eq!(update, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_3_tokens() {
+        let tokens = vec![
+            String::from("UPDATE"),
+            String::from("table"),
+            String::from("SET"),
+        ];
+        let update = Update::new_from_tokens(tokens);
+        assert_eq!(update, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_without_where() {
+        let tokens = vec![
+            String::from("UPDATE"),
+            String::from("table"),
+            String::from("SET"),
+            String::from("nombre"),
+            String::from("="),
+            String::from("Alen"),
+        ];
+        let update = Update::new_from_tokens(tokens).unwrap();
+        assert_eq!(
+            update,
+            Update {
+                table_name: String::from("table"),
+                set_clause: Set(vec![(String::from("nombre"), String::from("Alen"))]),
+                where_clause: None
+            }
+        );
+    }
+
+    #[test]
+    fn new_with_where() {
+        let tokens = vec![
+            String::from("UPDATE"),
+            String::from("table"),
+            String::from("SET"),
+            String::from("nombre"),
+            String::from("="),
+            String::from("Alen"),
+            String::from("WHERE"),
+            String::from("edad"),
+            String::from("<"),
+            String::from("30"),
+        ];
+        let update = Update::new_from_tokens(tokens).unwrap();
+        assert_eq!(
+            update,
+            Update {
+                table_name: String::from("table"),
+                set_clause: Set(vec![(String::from("nombre"), String::from("Alen"))]),
+                where_clause: Some(Where {
+                    condition: Condition::Simple {
+                        field: String::from("edad"),
+                        operator: Operator::Lesser,
+                        value: String::from("30"),
+                    },
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn update_without_where() {
+        let update = Update {
+            table_name: String::from("testing"),
+            set_clause: Set(vec![(String::from("nombre"), String::from("Alen"))]),
+            where_clause: None,
+        };
+
+        let folder_path = String::from("tablas");
+        let reader = update.open_table(&folder_path).unwrap();
+
+        let table = update.apply_to_table(reader).unwrap();
+
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Juan")),
+                    (String::from("apellido"), String::from("Pérez")),
+                    (String::from("edad"), String::from("30")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Ana")),
+                    (String::from("apellido"), String::from("López")),
+                    (String::from("edad"), String::from("18")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Carlos")),
+                    (String::from("apellido"), String::from("Gómez")),
+                    (String::from("edad"), String::from("40")),
+                ])),
+            ],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
+    }
+
+    #[test]
+    fn delete_with_where() {
+        let update = Update {
+            table_name: String::from("testing"),
+            set_clause: Set(vec![(String::from("nombre"), String::from("Alen"))]),
+            where_clause: Some(Where {
+                condition: Condition::Simple {
+                    field: String::from("edad"),
+                    operator: Operator::Greater,
+                    value: String::from("20"),
+                },
+            }),
+        };
+        let folder_path = String::from("tablas");
+        let reader = update.open_table(&folder_path).unwrap();
+
+        let table = update.apply_to_table(reader).unwrap();
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Alen")),
+                    (String::from("apellido"), String::from("Pérez")),
+                    (String::from("edad"), String::from("30")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Ana")),
+                    (String::from("apellido"), String::from("López")),
+                    (String::from("edad"), String::from("18")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Alen")),
+                    (String::from("apellido"), String::from("Gómez")),
+                    (String::from("edad"), String::from("40")),
+                ])),
+            ],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
     }
 }

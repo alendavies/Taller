@@ -97,8 +97,11 @@ fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
             let table = clause.open_table(folder_path)?;
 
             let result = clause.apply_to_table(table)?;
-
-            result_csv = table_to_csv(&result, &clause.columns)?;
+            if clause.columns[0] == "*" {
+                result_csv = table_to_csv(&result, &result.columns)?;
+            } else {
+                result_csv = table_to_csv(&result, &clause.columns)?;
+            }
         }
         "INSERT" => {
             let clause = Insert::new_from_tokens(tokens);

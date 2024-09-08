@@ -43,11 +43,11 @@ impl OrderBy {
     }
 
     pub fn execute<'a>(&self, registers: &'a mut Vec<Register>) -> &'a Vec<Register> {
-        registers.sort_by(|a, b| {
+        registers.sort_by(|val_a, val_b| {
             let mut result = Ordering::Equal;
             for column in &self.columns {
-                if let Some(val_a) = a.0.get(column) {
-                    if let Some(val_b) = b.0.get(column) {
+                if let Some(val_a) = val_a.0.get(column) {
+                    if let Some(val_b) = val_b.0.get(column) {
                         result = if self.order == "DESC" {
                             val_b.cmp(val_a)
                         } else {

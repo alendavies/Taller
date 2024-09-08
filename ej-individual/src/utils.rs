@@ -72,3 +72,7 @@ pub fn is_by(token1: &str) -> bool {
 pub fn is_delete(token: &str) -> bool {
     token == "DELETE"
 }
+
+pub fn is_set(token: &str) -> bool {
+    token == "SET"
+}

@@ -1,4 +1,5 @@
 use super::where_sql::Where;
+use crate::utils::{is_delete, is_from, is_where};
 use crate::{errors::SqlError, register::Register, table::Table, utils::find_file_in_folder};
 use std::io::Write;
 use std::{
@@ -7,41 +8,43 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+#[derive(PartialEq, Debug)]
 pub struct Delete {
     pub table_name: String,
-    pub where_clause: Where,
+    pub where_clause: Option<Where>,
 }
 
 impl Delete {
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
+        if tokens.len() < 3 {
+            return Err(SqlError::InvalidSyntax);
+        }
         let mut where_tokens: Vec<&str> = Vec::new();
 
         let mut i = 0;
+        let mut table_name = String::new();
 
-        if tokens[i] != "DELETE" {
-            println!("Clausula DELETE inválida");
-        }
+        while i < tokens.len() {
+            if i == 0 && !is_delete(&tokens[i]) || i == 1 && !is_from(&tokens[i]) {
+                return Err(SqlError::InvalidSyntax);
+            }
+            if i == 1 && is_from(&tokens[i]) {
+                table_name = tokens[i + 1].to_string();
+            }
 
-        i += 1;
-
-        if tokens[i] != "FROM" {
-            println!("Clausula DELETE inválida");
-        }
-        i += 1;
-
-        let table_name = tokens[i].to_string();
-        i += 1;
-
-        if i < tokens.len() {
-            if tokens[i] == "WHERE" {
+            if i == 3 && is_where(&tokens[i]) {
                 while i < tokens.len() {
                     where_tokens.push(tokens[i].as_str());
                     i += 1;
                 }
             }
+            i += 1;
         }
+        let mut where_clause = None;
 
-        let where_clause = Where::new_from_tokens(where_tokens)?;
+        if !where_tokens.is_empty() {
+            where_clause = Some(Where::new_from_tokens(where_tokens)?);
+        }
 
         Ok(Self {
             table_name,
@@ -57,6 +60,9 @@ impl Delete {
 
             if idx == 0 {
                 result.columns = line.split(',').map(|s| s.to_string()).collect();
+                if self.where_clause.is_none() {
+                    return Ok(result);
+                }
                 continue;
             }
             let register = self.execute(line, &result.columns)?;
@@ -110,17 +116,160 @@ impl Delete {
 
         let mut result = Register(HashMap::new());
 
-        let op_result = self.where_clause.execute(&register)?;
+        if let Some(where_clause) = &self.where_clause {
+            let op_result = where_clause.execute(&register)?;
 
-        if op_result == false {
-            for col in columns {
-                result.0.insert(
-                    col.to_string(),
-                    register.0.get(col).unwrap_or(&String::new()).to_string(),
-                );
+            if op_result == false {
+                for col in columns {
+                    result.0.insert(
+                        col.to_string(),
+                        register.0.get(col).unwrap_or(&String::new()).to_string(),
+                    );
+                }
             }
         }
-
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::Delete;
+    use crate::{
+        clauses::{
+            condition::{Condition, Operator},
+            where_sql::Where,
+        },
+        errors::SqlError,
+        register::Register,
+        table::Table,
+    };
+
+    #[test]
+    fn new_1_token() {
+        let tokens = vec![String::from("DELETE")];
+        let delete = Delete::new_from_tokens(tokens);
+        assert_eq!(delete, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_2_token() {
+        let tokens = vec![String::from("DELETE"), String::from("FROM")];
+        let delete = Delete::new_from_tokens(tokens);
+        assert_eq!(delete, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_without_where() {
+        let tokens = vec![
+            String::from("DELETE"),
+            String::from("FROM"),
+            String::from("table"),
+        ];
+        let delete = Delete::new_from_tokens(tokens).unwrap();
+        assert_eq!(
+            delete,
+            Delete {
+                table_name: String::from("table"),
+                where_clause: None
+            }
+        );
+    }
+
+    #[test]
+    fn new_4_tokens() {
+        let tokens = vec![
+            String::from("DELETE"),
+            String::from("FROM"),
+            String::from("table"),
+            String::from("WHERE"),
+        ];
+        let delete = Delete::new_from_tokens(tokens);
+        assert_eq!(delete, Err(SqlError::InvalidSyntax));
+    }
+
+    #[test]
+    fn new_with_where() {
+        let tokens = vec![
+            String::from("DELETE"),
+            String::from("FROM"),
+            String::from("table"),
+            String::from("WHERE"),
+            String::from("cantidad"),
+            String::from(">"),
+            String::from("1"),
+        ];
+        let delete = Delete::new_from_tokens(tokens).unwrap();
+        assert_eq!(
+            delete,
+            Delete {
+                table_name: String::from("table"),
+                where_clause: Some(Where {
+                    condition: Condition::Simple {
+                        field: String::from("cantidad"),
+                        operator: Operator::Greater,
+                        value: String::from("1")
+                    }
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn delete_without_where_should_delete_all() {
+        let delete = Delete {
+            table_name: String::from("testing"),
+            where_clause: None,
+        };
+        let folder_path = String::from("tablas");
+        let reader = delete.open_table(&folder_path).unwrap();
+
+        let table = delete.apply_to_table(reader).unwrap();
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
+    }
+
+    #[test]
+    fn delete_with_where() {
+        let delete = Delete {
+            table_name: String::from("testing"),
+            where_clause: Some(Where {
+                condition: Condition::Simple {
+                    field: String::from("edad"),
+                    operator: Operator::Greater,
+                    value: String::from("18"),
+                },
+            }),
+        };
+        let folder_path = String::from("tablas");
+        let reader = delete.open_table(&folder_path).unwrap();
+
+        let table = delete.apply_to_table(reader).unwrap();
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![Register(HashMap::from([
+                (String::from("nombre"), String::from("Ana")),
+                (String::from("apellido"), String::from("López")),
+                (String::from("edad"), String::from("18")),
+            ]))],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
     }
 }

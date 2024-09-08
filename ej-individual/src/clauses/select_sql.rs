@@ -165,10 +165,8 @@ impl Select {
             }
         }
 
-        let mut ordered_registers = Vec::new();
-
         if let Some(orderby) = &self.orderby_clause {
-            ordered_registers = orderby.execute(&mut result.registers).to_vec();
+            let ordered_registers = orderby.execute(&mut result.registers).to_vec();
             result.registers = self.filter_columns(&result.columns, ordered_registers);
         } else {
             result.registers = self.filter_columns(&result.columns, result.registers);

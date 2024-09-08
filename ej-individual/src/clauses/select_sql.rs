@@ -1,7 +1,7 @@
 use super::{orderby_sql::OrderBy, where_sql::Where};
 use crate::{
     errors::SqlError,
-    register::{self, Register},
+    register::Register,
     table::Table,
     utils::{find_file_in_folder, is_by, is_from, is_order, is_select, is_where},
 };
@@ -140,7 +140,7 @@ impl Select {
             let filtered: HashMap<String, String> = register
                 .0
                 .into_iter()
-                .filter(|(key, value)| cols_selected.contains(key))
+                .filter(|(key, _)| cols_selected.contains(key))
                 .collect();
 
             filtered_registers.push(Register(filtered));
@@ -169,15 +169,16 @@ impl Select {
 
         if let Some(orderby) = &self.orderby_clause {
             ordered_registers = orderby.execute(&mut result.registers).to_vec();
+            result.registers = self.filter_columns(&result.columns, ordered_registers);
+        } else {
+            result.registers = self.filter_columns(&result.columns, result.registers);
         }
-
-        result.registers = self.filter_columns(&result.columns, ordered_registers);
 
         Ok(result)
     }
 
     pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
-        if !self.columns.iter().all(|col| columns.contains(col)) {
+        if !self.columns.iter().all(|col| columns.contains(col)) && self.columns[0] != "*" {
             return Err(SqlError::InvalidColumn);
         }
 
@@ -221,13 +222,18 @@ impl Select {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::Select;
     use crate::{
         clauses::{
-            condition::{Condition, Operator},
+            condition::{Condition, LogicalOperator, Operator},
             orderby_sql::OrderBy,
+            where_sql::Where,
         },
         errors::SqlError,
+        register::Register,
+        table::Table,
     };
 
     #[test]
@@ -303,24 +309,23 @@ mod tests {
             String::from("col"),
             String::from("FROM"),
             String::from("table"),
-            String::from("WHERE"),
+            String::from("ORDER"),
+            String::from("BY"),
             String::from("cantidad"),
-            String::from(">"),
-            String::from("1"),
+            String::from("DESC"),
         ];
         let select = Select::new_from_tokens(tokens).unwrap();
         assert_eq!(select.columns, ["col"]);
         assert_eq!(select.table_name, "table");
-        let where_clause = select.where_clause.unwrap();
+        let orderby_clause = select.orderby_clause.unwrap();
         assert_eq!(
-            where_clause.condition,
-            Condition::Simple {
-                field: String::from("cantidad"),
-                operator: Operator::Greater,
-                value: String::from("1"),
+            orderby_clause,
+            OrderBy {
+                columns: vec![String::from("cantidad")],
+                order: String::from("DESC")
             }
         );
-        assert_eq!(select.orderby_clause, None);
+        assert_eq!(select.where_clause, None);
     }
 
     #[test]
@@ -360,5 +365,222 @@ mod tests {
                 order: String::new()
             }
         );
+    }
+
+    #[test]
+    fn select_all_without_where() {
+        let select = Select {
+            table_name: String::from("testing"),
+            columns: vec![String::from("*")],
+            where_clause: None,
+            orderby_clause: None,
+        };
+        let folder_path = String::from("tablas");
+        let reader = select.open_table(&folder_path).unwrap();
+
+        let table = select.apply_to_table(reader).unwrap();
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Juan")),
+                    (String::from("apellido"), String::from("Pérez")),
+                    (String::from("edad"), String::from("30")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Ana")),
+                    (String::from("apellido"), String::from("López")),
+                    (String::from("edad"), String::from("18")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Carlos")),
+                    (String::from("apellido"), String::from("Gómez")),
+                    (String::from("edad"), String::from("40")),
+                ])),
+            ],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
+    }
+
+    #[test]
+    fn select_all_without_where_orderby() {
+        let select = Select {
+            table_name: String::from("testing"),
+            columns: vec![String::from("*")],
+            where_clause: None,
+            orderby_clause: Some(OrderBy {
+                columns: vec![String::from("edad")],
+                order: String::new(),
+            }),
+        };
+        let folder_path = String::from("tablas");
+        let reader = select.open_table(&folder_path).unwrap();
+
+        let table = select.apply_to_table(reader).unwrap();
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Ana")),
+                    (String::from("apellido"), String::from("López")),
+                    (String::from("edad"), String::from("18")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Juan")),
+                    (String::from("apellido"), String::from("Pérez")),
+                    (String::from("edad"), String::from("30")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Carlos")),
+                    (String::from("apellido"), String::from("Gómez")),
+                    (String::from("edad"), String::from("40")),
+                ])),
+            ],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
+    }
+
+    #[test]
+    fn select_all_with_where() {
+        let select = Select {
+            table_name: String::from("testing"),
+            columns: vec![String::from("*")],
+            where_clause: Some(Where {
+                condition: Condition::Simple {
+                    field: String::from("edad"),
+                    operator: Operator::Greater,
+                    value: String::from("18"),
+                },
+            }),
+            orderby_clause: None,
+        };
+        let folder_path = String::from("tablas");
+        let reader = select.open_table(&folder_path).unwrap();
+
+        let table = select.apply_to_table(reader).unwrap();
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Juan")),
+                    (String::from("apellido"), String::from("Pérez")),
+                    (String::from("edad"), String::from("30")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Carlos")),
+                    (String::from("apellido"), String::from("Gómez")),
+                    (String::from("edad"), String::from("40")),
+                ])),
+            ],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
+    }
+
+    #[test]
+    fn select_all_with_where_orderby() {
+        let select = Select {
+            table_name: String::from("testing"),
+            columns: vec![String::from("*")],
+            where_clause: Some(Where {
+                condition: Condition::Simple {
+                    field: String::from("edad"),
+                    operator: Operator::Greater,
+                    value: String::from("18"),
+                },
+            }),
+            orderby_clause: Some(OrderBy {
+                columns: vec![String::from("edad")],
+                order: String::from("DESC"),
+            }),
+        };
+        let folder_path = String::from("tablas");
+        let reader = select.open_table(&folder_path).unwrap();
+
+        let table = select.apply_to_table(reader).unwrap();
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Carlos")),
+                    (String::from("apellido"), String::from("Gómez")),
+                    (String::from("edad"), String::from("40")),
+                ])),
+                Register(HashMap::from([
+                    (String::from("nombre"), String::from("Juan")),
+                    (String::from("apellido"), String::from("Pérez")),
+                    (String::from("edad"), String::from("30")),
+                ])),
+            ],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
+    }
+
+    #[test]
+    fn select_with_where_complex_orderby() {
+        let select = Select {
+            table_name: String::from("testing"),
+            columns: vec![String::from("nombre"), String::from("apellido")],
+            where_clause: Some(Where {
+                condition: Condition::Complex {
+                    left: Some(Box::new(Condition::Simple {
+                        field: String::from("edad"),
+                        operator: Operator::Greater,
+                        value: String::from("18"),
+                    })),
+                    operator: LogicalOperator::And,
+                    right: Box::new(Condition::Simple {
+                        field: String::from("nombre"),
+                        operator: Operator::Equal,
+                        value: String::from("Carlos"),
+                    }),
+                },
+            }),
+            orderby_clause: Some(OrderBy {
+                columns: vec![String::from("edad")],
+                order: String::from("DESC"),
+            }),
+        };
+        let folder_path = String::from("tablas");
+        let reader = select.open_table(&folder_path).unwrap();
+
+        let table = select.apply_to_table(reader).unwrap();
+        let expected = Table {
+            columns: vec![
+                String::from("nombre"),
+                String::from("apellido"),
+                String::from("edad"),
+            ],
+            registers: vec![Register(HashMap::from([
+                (String::from("nombre"), String::from("Carlos")),
+                (String::from("apellido"), String::from("Gómez")),
+            ]))],
+        };
+
+        assert_eq!(table.registers, expected.registers);
+        assert_eq!(table.columns, expected.columns);
     }
 }

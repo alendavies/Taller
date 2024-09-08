@@ -153,10 +153,15 @@ fn table_to_csv(table: &Table, column_order: &Vec<String>) -> Result<Vec<String>
 fn main() -> Result<(), SqlError> {
     let args: Vec<String> = env::args().collect();
 
-    let result = exec_query(&args[1], &args[2])?;
+    let result = exec_query(&args[1], &args[2]);
 
-    for line in result {
-        println!("{}", line);
+    match result {
+        Ok(csv) => {
+            for line in csv {
+                println!("{}", line);
+            }
+        }
+        Err(e) => println!("{}", e),
     }
 
     Ok(())

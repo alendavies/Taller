@@ -11,10 +11,10 @@ pub enum SqlError {
 impl Display for SqlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SqlError::InvalidTable => write!(f, "[{}]: [Error to open or process table]", self),
-            SqlError::InvalidColumn => write!(f, "[{}]: [Error to process column]", self),
-            SqlError::InvalidSyntax => write!(f, "[{}]: [Error to process query]", self),
-            SqlError::Error => write!(f, "[{}]: [Error]", self),
+            SqlError::InvalidTable => write!(f, "[InvalidTable]: [Error to open or process table]"),
+            SqlError::InvalidColumn => write!(f, "[InvalidColumn]: [Error to process column]"),
+            SqlError::InvalidSyntax => write!(f, "[InvalidSyntax]: [Error to process query]"),
+            SqlError::Error => write!(f, "[Error]: [Error]"),
         }
     }
 }

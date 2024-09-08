@@ -98,7 +98,7 @@ impl Update {
                 .insert(col.to_string(), atributes[idx].to_string());
         }
 
-        let op_result = self.where_clause.execute(&register.0);
+        let op_result = self.where_clause.execute(&register);
         match op_result {
             Ok(result) => {
                 if result == true {

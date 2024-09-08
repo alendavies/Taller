@@ -14,14 +14,6 @@ pub fn find_file_in_folder(folder_path: &str, file_name: &str) -> bool {
     false
 }
 
-pub fn is_logical_operator(token: &str) -> bool {
-    token == "AND" || token == "OR" || token == "NOT"
-}
-
-pub fn is_comparison_operator(token: &str) -> bool {
-    token == ">" || token == "<" || token == "=="
-}
-
 pub fn is_number(token: &str) -> bool {
     token.parse::<i32>().is_ok()
 }
@@ -68,4 +60,11 @@ pub fn is_into(token: &str) -> bool {
 
 pub fn is_from(token: &str) -> bool {
     token == "FROM"
+}
+
+pub fn is_order(token1: &str) -> bool {
+    token1 == "ORDER"
+}
+pub fn is_by(token1: &str) -> bool {
+    token1 == "BY"
 }

@@ -1,12 +1,11 @@
 use super::where_sql::Where;
 use crate::{errors::SqlError, register::Register, table::Table, utils::find_file_in_folder};
+use std::io::Write;
 use std::{
     collections::HashMap,
     fs::{self, File},
     io::{BufRead, BufReader},
 };
-
-use std::io::Write;
 
 pub struct Delete {
     pub table_name: String,
@@ -15,10 +14,6 @@ pub struct Delete {
 
 impl Delete {
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
-        if !tokens.contains(&String::from("DELETE")) || !tokens.contains(&String::from("FROM")) {
-            println!("Clausula DELETE inválida");
-        }
-
         let mut where_tokens: Vec<&str> = Vec::new();
 
         let mut i = 0;
@@ -115,7 +110,7 @@ impl Delete {
 
         let mut result = Register(HashMap::new());
 
-        let op_result = self.where_clause.execute(&register.0)?;
+        let op_result = self.where_clause.execute(&register)?;
 
         if op_result == false {
             for col in columns {

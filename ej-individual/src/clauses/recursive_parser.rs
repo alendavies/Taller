@@ -38,7 +38,7 @@ fn parse_and(tokens: &Vec<&str>, pos: &mut usize) -> Result<Condition, SqlError>
     if let Some(token) = tokens.get(*pos) {
         if is_not(token) {
             *pos += 1;
-            let expr = parse_base(tokens, pos)?;
+            let expr = parse_and(tokens, pos)?;
             Ok(Condition::new_complex(None, LogicalOperator::Not, expr))
         } else {
             parse_base(tokens, pos)

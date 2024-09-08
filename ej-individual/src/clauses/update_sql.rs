@@ -18,7 +18,7 @@ pub struct Update {
 
 impl Update {
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
-        if tokens.len() < 4 {
+        if tokens.len() < 6 {
             return Err(SqlError::InvalidSyntax);
         }
         let mut where_tokens = Vec::new();

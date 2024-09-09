@@ -61,7 +61,7 @@ impl OrderBy {
             i += 1;
         }
 
-        if i < tokens.len() && tokens[i] == "DESC" || tokens[i] == "ASC" {
+        if i < tokens.len() {
             order = tokens[i].to_string();
         }
 

@@ -9,6 +9,15 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+/// Struct representing the `UPDATE` SQL clause.
+/// The `UPDATE` clause is used to modify records in a table.
+///
+/// # Fields
+///
+/// * `table_name` - The name of the table to be updated.
+/// * `set_clause` - The set clause to be applied.
+/// * `where_clause` - The where clause to be applied.
+///
 #[derive(PartialEq, Debug)]
 pub struct Update {
     pub table_name: String,
@@ -17,6 +26,25 @@ pub struct Update {
 }
 
 impl Update {
+    /// Creates and returns a new `Update` instance from a vector of tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` - A vector of tokens that can be used to build a `Update` instance.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let tokens = vec!["UPDATE", "table", "SET", "nombre", "=", "Alen"];
+    /// let update_from_tokens = Update::new_from_tokens(tokens).unwrap();
+    /// let update = Update {
+    ///     table_name: "table".to_string(),
+    ///     set_clause: Set(vec![("nombre".to_string(), "Alen".to_string())]),
+    ///     where_clause: None,
+    /// };
+    ///
+    /// assert_eq!(update_from_tokens, update);
+    /// ```
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
         if tokens.len() < 6 {
             return Err(SqlError::InvalidSyntax);
@@ -70,6 +98,15 @@ impl Update {
         })
     }
 
+    /// Applies the `UPDATE` clause to a given table.
+    ///
+    /// Reads the table and applies the set clause to the registers that meet the where clause if it exist or to all the registers if it doesn't.
+    /// Returns a new table with the updated registers.
+    ///
+    /// # Arguments
+    ///
+    /// * `table` - A `BufReader<File>` that contains a reader for the table to be updated.
+    ///
     pub fn apply_to_table(&self, table: BufReader<File>) -> Result<Table, SqlError> {
         let mut result = Table::new();
 
@@ -88,7 +125,7 @@ impl Update {
         Ok(result)
     }
 
-    pub fn execute(&self, line: String, columns: &[String]) -> Result<Register, SqlError> {
+    fn execute(&self, line: String, columns: &[String]) -> Result<Register, SqlError> {
         let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
 
         let mut register = Register(HashMap::new());
@@ -116,6 +153,13 @@ impl Update {
         Ok(register)
     }
 
+    /// Writes the updated table in csv format to the file that contains the table in the given folder path.
+    ///
+    /// # Arguments
+    ///
+    /// * `csv` - A vector of strings that contains the updated table in csv format.
+    /// * `folder_path` - A string slice that contains the path to the folder where the table is located.
+    ///
     pub fn write_table(&self, csv: Vec<String>, folder_path: &str) -> Result<(), SqlError> {
         let temp_file_path = folder_path.to_string() + "/" + "temp.csv";
         let mut temp_file = File::create(&temp_file_path).map_err(|_| SqlError::Error)?;
@@ -128,6 +172,13 @@ impl Update {
         Ok(())
     }
 
+    /// Opens the table file in the given folder path.
+    /// Returns a `BufReader<File>` that contains a reader for the table file.
+    ///
+    /// # Arguments
+    ///
+    /// * `folder_path` - A string slice that contains the path to the folder where the table is located.
+    ///
     pub fn open_table(&self, folder_path: &str) -> Result<BufReader<File>, SqlError> {
         let table_name = self.table_name.to_string() + ".csv";
         if !find_file_in_folder(folder_path, &table_name) {

@@ -3,6 +3,12 @@ use std::collections::HashMap;
 
 /// Register struct
 ///
+/// The `Register` struct represents a table row.
+///
+/// # Fields
+///
+/// * A `HashMap` containing the column name and the column value.
+///
 /// # Examples
 ///
 /// ```

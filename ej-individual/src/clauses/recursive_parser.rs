@@ -4,6 +4,51 @@ use crate::{
     utils::{is_and, is_left_paren, is_not, is_or, is_right_paren},
 };
 
+/// Parses a condition from a vector of tokens.
+///
+/// The condition can be a simple condition or a complex condition.
+/// A simple condition contains a field, an operator and a value.
+/// A complex condition contains a left condition, a logical operator, such as AND, OR or NOT, and a right condition.
+///
+/// Returns a `Condition` instance.
+///
+/// # Arguments
+///
+/// * `tokens` - A vector of tokens that can be used to build a `Condition` instance.
+/// * `pos` - A mutable reference to a `usize` that represents the current position in the tokens vector.
+///
+/// # Examples
+///
+/// ```
+/// let tokens = vec!["city", "=", "Gaiman"];
+/// let mut pos = 0;
+/// let condition = parse_condition(&tokens, &mut pos).unwrap();
+///
+/// assert_eq!(condition, Condition::Simple {
+///     field: "city".to_string(),
+///     operator: Operator::Equal,
+///     value: "Gaiman".to_string(),
+/// });
+///
+/// let tokens = vec!["city", "=", "Gaiman", "AND", "age", "<", "30"];
+/// let mut pos = 0;
+/// let condition = parse_condition(&tokens, &mut pos).unwrap();
+///
+/// assert_eq!(condition, Condition::Complex {
+///     left: Some(Box::new(Condition::Simple {
+///         field: "city".to_string(),
+///         operator: Operator::Equal,
+///         value: "Gaiman".to_string(),
+///         })),
+///     operator: LogicalOperator::And,
+///     right: Box::new(Condition::Simple {
+///         field: "age".to_string(),
+///         operator: Operator::Lesser,
+///         value: "30".to_string(),
+///         }),
+///     });
+/// ```
+///
 pub fn parse_condition(tokens: &Vec<&str>, pos: &mut usize) -> Result<Condition, SqlError> {
     let mut left = parse_or(tokens, pos)?;
 

@@ -18,6 +18,6 @@ impl Where {
     }
 
     pub fn execute(&self, register: &Register) -> Result<bool, SqlError> {
-        return self.condition.execute(&register.0);
+        self.condition.execute(&register.0)
     }
 }

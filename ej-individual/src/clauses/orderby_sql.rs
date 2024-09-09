@@ -33,10 +33,8 @@ impl OrderBy {
             i += 1;
         }
 
-        if i < tokens.len() {
-            if tokens[i] == "DESC" || tokens[i] == "ASC" {
-                order = tokens[i].to_string();
-            }
+        if i < tokens.len() && tokens[i] == "DESC" || tokens[i] == "ASC" {
+            order = tokens[i].to_string();
         }
 
         Ok(Self { columns, order })

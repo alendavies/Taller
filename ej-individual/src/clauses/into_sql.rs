@@ -15,7 +15,7 @@ impl Into {
         let table_name;
         let mut columns: Vec<String> = Vec::new();
 
-        if is_into(&tokens[i]) {
+        if is_into(tokens[i]) {
             i += 1;
             table_name = tokens[i].to_string();
             i += 1;

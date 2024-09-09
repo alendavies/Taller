@@ -1,4 +1,5 @@
-/// Takes a string and returns a vector of tokens.
+/// Takes a string and returns a vector of tokens (Strings).
+///
 pub fn tokens_from_query(string: &str) -> Vec<String> {
     let mut index = 0;
     let mut tokens = Vec::new();

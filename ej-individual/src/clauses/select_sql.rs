@@ -19,7 +19,7 @@ pub struct Select {
     pub orderby_clause: Option<OrderBy>,
 }
 
-fn parse_columns<'a>(tokens: &'a Vec<String>, i: &mut usize) -> Result<Vec<&'a String>, SqlError> {
+fn parse_columns<'a>(tokens: &'a [String], i: &mut usize) -> Result<Vec<&'a String>, SqlError> {
     let mut columns = Vec::new();
     if is_select(&tokens[*i]) {
         if *i < tokens.len() {
@@ -35,19 +35,19 @@ fn parse_columns<'a>(tokens: &'a Vec<String>, i: &mut usize) -> Result<Vec<&'a S
     Ok(columns)
 }
 
-fn parse_table_name(tokens: &Vec<String>, i: &mut usize) -> Result<String, SqlError> {
+fn parse_table_name(tokens: &[String], i: &mut usize) -> Result<String, SqlError> {
     if *i < tokens.len() && is_from(&tokens[*i]) {
         *i += 1;
         let table_name = tokens[*i].to_string();
         *i += 1;
         Ok(table_name)
     } else {
-        return Err(SqlError::InvalidSyntax);
+        Err(SqlError::InvalidSyntax)
     }
 }
 
 fn parse_where_and_orderby<'a>(
-    tokens: &'a Vec<String>,
+    tokens: &'a [String],
     i: &mut usize,
 ) -> Result<(Vec<&'a str>, Vec<&'a str>), SqlError> {
     let mut where_tokens = Vec::new();
@@ -74,7 +74,7 @@ fn parse_where_and_orderby<'a>(
     Ok((where_tokens, orderby_tokens))
 }
 
-fn convert_line_to_register(line: String, columns: &Vec<String>) -> Register {
+fn convert_line_to_register(line: String, columns: &[String]) -> Register {
     let attributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
     let mut original = Register(HashMap::new());
     for (idx, col) in columns.iter().enumerate() {
@@ -118,8 +118,8 @@ impl Select {
         Ok(Self {
             table_name,
             columns: columns.iter().map(|c| c.to_string()).collect(),
-            where_clause: where_clause,
-            orderby_clause: orderby_clause,
+            where_clause,
+            orderby_clause,
         })
     }
 
@@ -185,7 +185,7 @@ impl Select {
 
         if let Some(where_clause) = &self.where_clause {
             let op_result = where_clause.execute(&original)?;
-            if op_result == true {
+            if op_result {
                 for col in columns {
                     result.0.insert(
                         col.to_string(),

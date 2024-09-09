@@ -54,7 +54,7 @@ fn parse_base(tokens: &Vec<&str>, pos: &mut usize) -> Result<Condition, SqlError
             *pos += 1;
             let expr = parse_condition(tokens, pos)?;
             let next_token = tokens.get(*pos).ok_or(SqlError::Error)?;
-            if is_right_paren(&next_token) {
+            if is_right_paren(next_token) {
                 *pos += 1;
                 Ok(expr)
             } else {

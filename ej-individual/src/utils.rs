@@ -22,7 +22,7 @@ pub fn table_to_csv(table: &Table, column_order: &Vec<String>) -> Result<Vec<Str
     result.push(column_order.join(","));
 
     for register in &table.registers {
-        let register_csv = register.to_csv(&column_order)?;
+        let register_csv = register.to_csv(column_order)?;
         result.push(register_csv);
     }
 

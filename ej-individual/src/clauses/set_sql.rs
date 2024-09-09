@@ -8,7 +8,7 @@ impl Set {
         let mut set = Vec::new();
         let mut i = 0;
 
-        if !is_set(&tokens[i]) || !tokens.contains(&"=") {
+        if !is_set(tokens[i]) || !tokens.contains(&"=") {
             return Err(SqlError::InvalidSyntax);
         }
         i += 1;

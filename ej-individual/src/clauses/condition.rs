@@ -31,12 +31,10 @@ pub enum Condition {
 
 impl Condition {
     pub fn new_simple(field: &str, operator: &str, value: &str) -> Result<Self, SqlError> {
-        let op: Operator;
-
-        match operator {
-            "=" => op = Operator::Equal,
-            ">" => op = Operator::Greater,
-            "<" => op = Operator::Lesser,
+        let op = match operator {
+            "=" => Operator::Equal,
+            ">" => Operator::Greater,
+            "<" => Operator::Lesser,
             _ => return Err(SqlError::Error),
         };
 
@@ -47,15 +45,15 @@ impl Condition {
         })
     }
 
-    pub fn new_simple_from_tokens(tokens: &Vec<&str>, pos: &mut usize) -> Result<Self, SqlError> {
+    pub fn new_simple_from_tokens(tokens: &[&str], pos: &mut usize) -> Result<Self, SqlError> {
         if let Some(field) = tokens.get(*pos) {
-            *pos += 1; // Consume field
+            *pos += 1;
 
             if let Some(operator) = tokens.get(*pos) {
-                *pos += 1; // Consume operator
+                *pos += 1;
 
                 if let Some(value) = tokens.get(*pos) {
-                    *pos += 1; // Consume value
+                    *pos += 1;
                     Ok(Condition::new_simple(field, operator, value)?)
                 } else {
                     Err(SqlError::Error)

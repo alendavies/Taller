@@ -32,10 +32,8 @@ impl Update {
                 return Err(SqlError::InvalidSyntax);
             }
 
-            if i == 0 && is_update(&tokens[i]) {
-                if i + 1 < tokens.len() {
-                    table_name = tokens[i + 1].to_string();
-                }
+            if i == 0 && is_update(&tokens[i]) && i + 1 < tokens.len() {
+                table_name = tokens[i + 1].to_string();
             }
 
             if i == 2 && is_set(&tokens[i]) {
@@ -90,7 +88,7 @@ impl Update {
         Ok(result)
     }
 
-    pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
+    pub fn execute(&self, line: String, columns: &[String]) -> Result<Register, SqlError> {
         let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
 
         let mut register = Register(HashMap::new());
@@ -104,7 +102,7 @@ impl Update {
         if let Some(where_clause) = &self.where_clause {
             let op_result = where_clause.execute(&register)?;
 
-            if op_result == true {
+            if op_result {
                 for (col, val) in &self.set_clause.0 {
                     register.0.insert(col.to_string(), val.to_string());
                 }

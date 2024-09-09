@@ -28,10 +28,8 @@ impl Delete {
             if i == 0 && !is_delete(&tokens[i]) || i == 1 && !is_from(&tokens[i]) {
                 return Err(SqlError::InvalidSyntax);
             }
-            if i == 1 && is_from(&tokens[i]) {
-                if i + 1 < tokens.len() {
-                    table_name = tokens[i + 1].to_string();
-                }
+            if i == 1 && is_from(&tokens[i]) && i + 1 < tokens.len() {
+                table_name = tokens[i + 1].to_string();
             }
 
             if i == 3 && is_where(&tokens[i]) {
@@ -97,7 +95,7 @@ impl Delete {
         if let Some(where_clause) = &self.where_clause {
             let op_result = where_clause.execute(&register)?;
 
-            if op_result == false {
+            if !op_result {
                 for col in columns {
                     result.0.insert(
                         col.to_string(),

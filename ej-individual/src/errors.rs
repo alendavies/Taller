@@ -1,11 +1,20 @@
 use std::fmt::Display;
 
+/// Enum representing the possible errors that can occur when processing SQL queries.
+///
+/// The possible errors are:
+///
+/// - `InvalidTable`: related to problems with the processing of tables.
+/// - `InvalidColumn`: related to problems with the processing of columns.
+/// - `InvalidSyntax`: related to problems with the processing of queries.
+/// - `Error`: generic type for other possible errors detected.
+///
 #[derive(Debug, PartialEq)]
 pub enum SqlError {
-    InvalidTable,  // relacionado a problemas con el procesamiento de las tablas.
-    InvalidColumn, // relacionado a problemas con el procesamiento de columnas.
-    InvalidSyntax, // relacionado a problemas con el procesamiento de consultas.
-    Error,         // tipo genérico para otros posibles errores detectados.
+    InvalidTable,
+    InvalidColumn,
+    InvalidSyntax,
+    Error,
 }
 
 impl Display for SqlError {

@@ -1,4 +1,11 @@
-/// Takes a string and returns a vector of tokens (Strings).
+/// Converts a query string into a vector of tokens.
+///
+/// # Examples
+/// ```
+/// let string = "SELECT * FROM table WHERE column = 'value';";
+/// let tokens = tokens::tokens_from_query(string);
+/// assert_eq!(tokens, vec!["SELECT", "*", "FROM", "table", "WHERE", "column", "=", "value"]);
+/// ```
 ///
 pub fn tokens_from_query(string: &str) -> Vec<String> {
     let mut index = 0;

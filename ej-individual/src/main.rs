@@ -11,6 +11,36 @@ use std::env;
 use tokens::tokens_from_query;
 use utils::table_to_csv;
 
+/// Matches the first token of the query and executes the corresponding SQL clause.
+///
+/// Returns a vector of strings with the result of the query for SELECT clauses.
+///
+/// Returns an empty vector for INSERT, DELETE and UPDATE clauses because they don't show results in the console.
+///
+/// Returns an error for invalid syntax or unknown clauses.
+///
+/// # Arguments
+///
+/// * `folder_path` - A string slice that holds the path to the folder where the tables are stored.
+/// * `query` - A string slice that holds the SQL query to be executed.
+///
+/// # Examples
+///
+/// ```
+/// let folder_path = "tables";
+/// let query = "SELECT * FROM table1";
+/// let result = exec_query(folder_path, query);
+///
+/// assert_eq!(result, Ok(vec!["1,Alen,25".to_string()]));
+///
+///
+/// let folder_path = "tables";
+/// let query = "INSERT INTO table1 (id, name, age) VALUES (2, Bob, 30)";
+/// let result = exec_query(folder_path, query);
+///
+/// assert_eq!(result, Ok(vec![]));
+/// ```
+///
 fn exec_query(folder_path: &str, query: &str) -> Result<Vec<String>, SqlError> {
     let tokens = tokens_from_query(query);
     let mut result_csv = Vec::new();

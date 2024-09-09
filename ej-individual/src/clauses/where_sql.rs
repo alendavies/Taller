@@ -21,6 +21,8 @@ impl Where {
     ///
     /// * `tokens` - A vector of tokens that can be used to build a `Where` instance.
     ///
+    /// The tokens should be in the following order: `WHERE`, `column`, `operator`, `value` in the case of a simple condition, and `WHERE`, `condition`, `AND` or `OR`, `condition` for a complex condition.
+    ///
     /// # Examples
     ///
     /// ```
@@ -48,7 +50,13 @@ impl Where {
     }
 
     /// Executes the `WHERE` clause.
+    ///
     /// It evaluates the condition against the given `Register` and returns `true` if the condition is met, `false` otherwise.
+    ///
+    /// # Arguments
+    ///
+    /// * `register` - The `Register` to be evaluated.
+    ///
     pub fn execute(&self, register: &Register) -> Result<bool, SqlError> {
         self.condition.execute(&register.0)
     }

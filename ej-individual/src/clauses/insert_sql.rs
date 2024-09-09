@@ -4,6 +4,14 @@ use crate::utils::{find_file_in_folder, is_insert, is_values};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 
+/// Struct that represents the `INSERT` SQL clause.
+/// The `INSERT` clause is used to insert new records into a table.
+///
+/// # Fields
+///
+/// * `values` - A vector of strings that contains the values to be inserted.
+/// * `into_clause` - An `Into` struct that contains the table name and columns.
+///
 #[derive(Debug, PartialEq)]
 pub struct Insert {
     pub values: Vec<String>,
@@ -11,6 +19,44 @@ pub struct Insert {
 }
 
 impl Insert {
+    /// Creates and returns a new `Insert` instance from a vector of tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` - A vector of strings that contains the tokens to be parsed.
+    ///
+    /// The tokens should be in the following order: `INSERT`, `INTO`, `table_name`, `column_names`, `VALUES`, `values`.
+    ///
+    /// The `column_names` and `values` should be comma-separated and between parentheses.
+    ///
+    /// If a pair of col, value is missing for a column in the table, the value will be an empty string for that column.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let tokens = vec![
+    ///     String::from("INSERT"),
+    ///     String::from("INTO"),
+    ///     String::from("table"),
+    ///     String::from("name, age"),
+    ///     String::from("VALUES"),
+    ///     String::from("Alen, 25"),
+    /// ];
+    ///
+    /// let insert = Insert::new_from_tokens(tokens).unwrap();
+    ///
+    /// assert_eq!(
+    ///     insert,
+    ///     Insert {
+    ///         values: vec![String::from("Alen"), String::from("25")],
+    ///         into_clause: Into {
+    ///             table_name: String::from("table"),
+    ///             columns: vec![String::from("name"), String::from("age")]
+    ///         }
+    ///     }
+    /// );
+    /// ```
+    ///
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
         if tokens.len() < 6 {
             return Err(SqlError::InvalidSyntax);
@@ -53,6 +99,12 @@ impl Insert {
         })
     }
 
+    /// Applies the `INSERT` clause to a table.
+    ///
+    /// # Arguments
+    ///
+    /// * `file` - A mutable reference to a `File` instance that represents the table file.
+    ///
     pub fn apply_to_table(&mut self, file: &mut File) -> Result<(), SqlError> {
         let mut reader = BufReader::new(file.by_ref());
 
@@ -79,7 +131,7 @@ impl Insert {
         Ok(())
     }
 
-    pub fn reorder_values(&mut self, columns: Vec<String>) {
+    fn reorder_values(&mut self, columns: Vec<String>) {
         let mut reordered_values: Vec<&str> = Vec::new();
         let mut reordered_cols: Vec<&str> = Vec::new();
 
@@ -100,6 +152,12 @@ impl Insert {
         self.values = reordered_values.iter().map(|c| c.to_string()).collect();
     }
 
+    /// Opens the table file and returns a `File` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `folder_path` - A string slice that contains the path to the folder where the table file is located.
+    ///
     pub fn open_table(&self, folder_path: &str) -> Result<File, SqlError> {
         let table_name = self.into_clause.table_name.to_string() + ".csv";
         if !find_file_in_folder(folder_path, &table_name) {
@@ -118,7 +176,6 @@ impl Insert {
 }
 
 #[cfg(test)]
-
 mod test {
     use crate::errors::SqlError;
     use std::io::BufRead;

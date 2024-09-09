@@ -11,6 +11,16 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+/// Struct that represents the `SELECT` SQL clause.
+/// The `SELECT` clause is used to select data from a table.
+///
+/// # Fields
+///
+/// * `table_name` - The name of the table to select data from.
+/// * `columns` - The columns to select from the table.
+/// * `where_clause` - The `WHERE` clause to filter the result set.
+/// * `orderby_clause` - The `ORDER BY` clause to sort the result set.
+///
 #[derive(Debug, PartialEq)]
 pub struct Select {
     pub table_name: String,
@@ -87,6 +97,16 @@ fn convert_line_to_register(line: String, columns: &[String]) -> Register {
 }
 
 impl Select {
+    /// Creates and returns a new `Select` instance from a vector of `String` tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` - A vector of `String` tokens that represent the `SELECT` clause.
+    ///
+    /// The tokens should be in the following order: `SELECT`, `columns`, `FROM`, `table_name`, `WHERE`, `condition`, `ORDER`, `BY`, `columns`, `order`.
+    ///
+    /// The `columns` should be comma-separated.
+    ///
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
         if tokens.len() < 4 {
             return Err(SqlError::InvalidSyntax);
@@ -149,6 +169,12 @@ impl Select {
         filtered_registers
     }
 
+    /// Applies the `SELECT` clause to a table and returns the resulting `Table`.
+    ///
+    /// # Arguments
+    ///
+    /// * `table` - A `BufReader<File>` that represents the table to apply the `SELECT` clause to.
+    ///
     pub fn apply_to_table(&self, table: BufReader<File>) -> Result<Table, SqlError> {
         let mut result = Table::new();
 
@@ -175,7 +201,7 @@ impl Select {
         Ok(result)
     }
 
-    pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
+    fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
         if !self.columns.iter().all(|col| columns.contains(col)) && self.columns[0] != "*" {
             return Err(SqlError::InvalidColumn);
         }
@@ -204,6 +230,12 @@ impl Select {
         Ok(result)
     }
 
+    /// Opens the table file and returns a `BufReader<File>`.
+    ///
+    /// # Arguments
+    ///
+    /// * `folder_path` - A `&str` that represents the path to the folder where the table file is located.
+    ///
     pub fn open_table(&self, folder_path: &str) -> Result<BufReader<File>, SqlError> {
         let table_name = self.table_name.to_string() + ".csv";
         if !find_file_in_folder(folder_path, &table_name) {

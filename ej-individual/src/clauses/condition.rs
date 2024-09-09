@@ -30,6 +30,8 @@ impl Condition {
     /// * `tokens` - A slice of `&str` with the tokens of the condition.
     /// * `pos` - A mutable reference to `usize` with the position of the tokens.
     ///
+    /// The tokens must be in the following order: `field`, `operator`, `value`.
+    ///
     /// # Examples
     ///
     /// ```

@@ -8,6 +8,14 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+/// Struct that represents the `DELETE` SQL clause.
+/// The `DELETE` clause is used to delete records from a table.
+///
+/// # Fields
+///
+/// - `table_name`: a `String` that holds the name of the table from which the records will be deleted.
+/// - `where_clause`: an `Option<Where>` that holds the condition that the records must meet to be deleted. If it is `None`, all records will be deleted.
+///
 #[derive(PartialEq, Debug)]
 pub struct Delete {
     pub table_name: String,
@@ -15,6 +23,35 @@ pub struct Delete {
 }
 
 impl Delete {
+    /// Creates and returns a new `Delete` instance from tokens.
+    ///
+    /// # Arguments
+    ///
+    /// - `tokens`: a `Vec<String>` that holds the tokens that form the `DELETE` clause.
+    ///
+    /// The tokens must be in the following order: `DELETE`, `FROM`, `table_name`, `WHERE`, `condition`.
+    ///
+    /// If the `WHERE` clause is not present, the `where_clause` field will be `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let tokens = vec![
+    ///     String::from("DELETE"),
+    ///     String::from("FROM"),
+    ///     String::from("table"),
+    /// ];
+    /// let delete = Delete::new_from_tokens(tokens).unwrap();
+    ///
+    /// assert_eq!(
+    ///    delete,
+    ///     Delete {
+    ///         table_name: String::from("table"),
+    ///         where_clause: None
+    ///     }
+    /// );
+    /// ```
+    ///
     pub fn new_from_tokens(tokens: Vec<String>) -> Result<Self, SqlError> {
         if tokens.len() < 3 {
             return Err(SqlError::InvalidSyntax);
@@ -57,6 +94,17 @@ impl Delete {
         })
     }
 
+    /// Applies the `DELETE` clause to the given table.
+    ///
+    /// Returns a new table with the records that do not meet the condition.
+    /// The ones that meet the condition will be deleted.
+    ///
+    /// If the `WHERE` clause is not present, all records will be deleted.
+    ///
+    /// # Arguments
+    ///
+    /// - `table`: a `BufReader<File>` that holds the table to which the `DELETE` clause will be applied.
+    ///
     pub fn apply_to_table(&self, table: BufReader<File>) -> Result<Table, SqlError> {
         let mut result = Table::new();
 
@@ -79,7 +127,7 @@ impl Delete {
         Ok(result)
     }
 
-    pub fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
+    fn execute(&self, line: String, columns: &Vec<String>) -> Result<Register, SqlError> {
         let atributes: Vec<String> = line.split(',').map(|s| s.to_string()).collect();
 
         let mut register = Register(HashMap::new());
@@ -107,6 +155,13 @@ impl Delete {
         Ok(result)
     }
 
+    /// Updates the table file with the new data after the `DELETE` clause is applied.
+    ///
+    /// # Arguments
+    ///
+    /// - `csv`: a `Vec<String>` that holds the new data to be written to the table file.
+    /// - `folder_path`: a `&str` that holds the path to the folder where the table file is located.
+    ///
     pub fn write_table(&self, csv: Vec<String>, folder_path: &str) -> Result<(), SqlError> {
         let temp_file_path = folder_path.to_string() + "/" + "temp.csv";
         let mut temp_file = File::create(&temp_file_path).map_err(|_| SqlError::Error)?;
@@ -122,6 +177,12 @@ impl Delete {
         Ok(())
     }
 
+    /// Opens the table file to which the `DELETE` clause will be applied.
+    ///
+    /// # Arguments
+    ///
+    /// - `folder_path`: a `&str` that holds the path to the folder where the table file is located.
+    ///
     pub fn open_table(&self, folder_path: &str) -> Result<BufReader<File>, SqlError> {
         let table_name = self.table_name.to_string() + ".csv";
         if !find_file_in_folder(folder_path, &table_name) {

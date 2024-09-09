@@ -32,6 +32,8 @@ impl Update {
     ///
     /// * `tokens` - A vector of tokens that can be used to build a `Update` instance.
     ///
+    /// The tokens should be in the following order: `UPDATE`, `table`, `SET`, `column`, `=`, `value`.
+    ///
     /// # Examples
     ///
     /// ```

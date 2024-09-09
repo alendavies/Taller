@@ -18,6 +18,8 @@ impl Set {
     ///
     /// * `tokens` - A vector of tokens that can be used to build a `Set` instance.
     ///
+    /// The tokens should be in the following order: `SET`, `column`, `=`, `value`.
+    ///
     /// # Examples
     ///
     /// ```

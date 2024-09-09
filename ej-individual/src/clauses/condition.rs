@@ -1,19 +1,7 @@
-use crate::{errors::SqlError, utils::is_number};
+use crate::{
+    errors::SqlError, logical_operator::LogicalOperator, operator::Operator, utils::is_number,
+};
 use std::collections::HashMap;
-
-#[derive(Debug, PartialEq)]
-pub enum LogicalOperator {
-    And,
-    Or,
-    Not,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Operator {
-    Equal,
-    Greater,
-    Lesser,
-}
 
 #[derive(Debug, PartialEq)]
 pub enum Condition {

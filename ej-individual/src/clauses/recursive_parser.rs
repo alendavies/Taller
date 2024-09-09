@@ -1,6 +1,7 @@
-use super::condition::{Condition, LogicalOperator};
+use super::condition::Condition;
 use crate::{
     errors::SqlError,
+    logical_operator::LogicalOperator,
     utils::{is_and, is_left_paren, is_not, is_or, is_right_paren},
 };
 
@@ -116,9 +117,10 @@ fn parse_base(tokens: &Vec<&str>, pos: &mut usize) -> Result<Condition, SqlError
 
 #[cfg(test)]
 mod tests {
-    use crate::clauses::{
-        condition::Operator,
-        recursive_parser::{parse_condition, Condition, LogicalOperator},
+    use crate::{
+        clauses::recursive_parser::{parse_condition, Condition},
+        logical_operator::LogicalOperator,
+        operator::Operator,
     };
 
     #[test]

@@ -198,13 +198,9 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::{
-        clauses::{
-            condition::{Condition, Operator},
-            set_sql::Set,
-            update_sql::Update,
-            where_sql::Where,
-        },
+        clauses::{condition::Condition, set_sql::Set, update_sql::Update, where_sql::Where},
         errors::SqlError,
+        operator::Operator,
         register::Register,
         table::Table,
     };

@@ -224,12 +224,10 @@ mod tests {
 
     use super::Select;
     use crate::{
-        clauses::{
-            condition::{Condition, LogicalOperator, Operator},
-            orderby_sql::OrderBy,
-            where_sql::Where,
-        },
+        clauses::{condition::Condition, orderby_sql::OrderBy, where_sql::Where},
         errors::SqlError,
+        logical_operator::LogicalOperator,
+        operator::Operator,
         register::Register,
         table::Table,
     };

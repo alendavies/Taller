@@ -1,5 +1,7 @@
 mod clauses;
 mod errors;
+mod logical_operator;
+mod operator;
 mod register;
 mod table;
 mod tokens;

@@ -143,11 +143,9 @@ mod tests {
 
     use super::Delete;
     use crate::{
-        clauses::{
-            condition::{Condition, Operator},
-            where_sql::Where,
-        },
+        clauses::{condition::Condition, where_sql::Where},
         errors::SqlError,
+        operator::Operator,
         register::Register,
         table::Table,
     };

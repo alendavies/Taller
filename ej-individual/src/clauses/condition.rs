@@ -3,6 +3,11 @@ use crate::{
 };
 use std::collections::HashMap;
 
+/// Enum for the conditions used in the `WHERE` clause.
+///
+/// - `Simple`: Simple condition with a field, operator and value.
+/// - `Complex`: Complex condition with a left condition, logical operator and right condition.
+///
 #[derive(Debug, PartialEq)]
 pub enum Condition {
     Simple {
@@ -18,21 +23,28 @@ pub enum Condition {
 }
 
 impl Condition {
-    pub fn new_simple(field: &str, operator: &str, value: &str) -> Result<Self, SqlError> {
-        let op = match operator {
-            "=" => Operator::Equal,
-            ">" => Operator::Greater,
-            "<" => Operator::Lesser,
-            _ => return Err(SqlError::Error),
-        };
-
-        Ok(Condition::Simple {
-            field: field.to_string(),
-            operator: op,
-            value: value.to_string(),
-        })
-    }
-
+    /// Creates a new `Condition` with a simple condition from tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` - A slice of `&str` with the tokens of the condition.
+    /// * `pos` - A mutable reference to `usize` with the position of the tokens.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let tokens = vec!["age", ">", "18"];
+    /// let pos = 0;
+    /// let condition = Condition::new_simple_from_tokens(&tokens, &mut pos).unwrap();
+    /// assert_eq!(condition,
+    ///     Condition::Simple {
+    ///         field: String::from("age"),
+    ///         operator: Operator::Greater,
+    ///         value: String::from("18")
+    ///     })
+    ///
+    /// ```
+    ///
     pub fn new_simple_from_tokens(tokens: &[&str], pos: &mut usize) -> Result<Self, SqlError> {
         if let Some(field) = tokens.get(*pos) {
             *pos += 1;
@@ -44,16 +56,70 @@ impl Condition {
                     *pos += 1;
                     Ok(Condition::new_simple(field, operator, value)?)
                 } else {
-                    Err(SqlError::Error)
+                    Err(SqlError::InvalidSyntax)
                 }
             } else {
-                Err(SqlError::Error)
+                Err(SqlError::InvalidSyntax)
             }
         } else {
-            Err(SqlError::Error)
+            Err(SqlError::InvalidSyntax)
         }
     }
 
+    fn new_simple(field: &str, operator: &str, value: &str) -> Result<Self, SqlError> {
+        let op = match operator {
+            "=" => Operator::Equal,
+            ">" => Operator::Greater,
+            "<" => Operator::Lesser,
+            _ => return Err(SqlError::InvalidSyntax),
+        };
+
+        Ok(Condition::Simple {
+            field: field.to_string(),
+            operator: op,
+            value: value.to_string(),
+        })
+    }
+
+    /// Creates a new `Condition` with a complex condition.
+    ///
+    /// # Arguments
+    ///
+    /// * `left` - An optional `Condition` with the left condition.
+    /// * `operator` - A `LogicalOperator` with the logical operator.
+    /// * `right` - A `Condition` with the right condition.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let left = Condition::Simple {
+    ///     field: String::from("age"),
+    ///     operator: Operator::Greater,
+    ///     value: String::from("18"),
+    /// };
+    /// let right = Condition::Simple {
+    ///     field: String::from("city"),
+    ///     operator: Operator::Equal,
+    ///     value: String::from("Gaiman"),
+    /// };
+    /// let complex = Condition::new_complex(Some(left), LogicalOperator::And, right);
+    ///
+    /// assert_eq!(complex,
+    ///    Condition::Complex {
+    ///         left: Some(Box::new(Condition::Simple {
+    ///                     field: String::from("age"),
+    ///                     operator: Operator::Greater,
+    ///                     value: String::from("18"),
+    ///          })),
+    ///         operator: LogicalOperator::And,
+    ///         right: Box::new(Condition::Simple {
+    ///                     field: String::from("city"),
+    ///                     operator: Operator::Equal,
+    ///                     value: String::from("Gaiman"),
+    ///          })
+    /// })
+    /// ```
+    ///
     pub fn new_complex(
         left: Option<Condition>,
         operator: LogicalOperator,
@@ -66,6 +132,13 @@ impl Condition {
         }
     }
 
+    /// Executes the condition on the given register.
+    /// Returns a bool with the result of the condition.
+    ///
+    /// # Arguments
+    ///
+    /// * `register` - A reference to a `HashMap<String, String>` with the register to evaluate.
+    ///
     pub fn execute(&self, register: &HashMap<String, String>) -> Result<bool, SqlError> {
         let op_result: Result<bool, SqlError> = match &self {
             Condition::Simple {
@@ -122,10 +195,9 @@ impl Condition {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::Condition;
     use crate::clauses::condition::{LogicalOperator, Operator};
+    use std::collections::HashMap;
 
     #[test]
     fn create_simple() {
